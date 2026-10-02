@@ -26,7 +26,7 @@ export type State = {
   devices: { band: { online: boolean; battery?: number | undefined; lastSync?: number | undefined }; box: { online: boolean; tray?: string | undefined; lastSync?: number | undefined } };
   doses: Partial<Record<Slot, DoseStatus>>;
   emergency: Alert | null;
-  mqtt: { broker: string; port: number; connected: boolean };
+  mqtt: { broker: string; port: number; connected: boolean; user: string; pass: string };
   telegram: { botToken: string; chatId: string };
   checkup: { nextDate: string; doctor: string; notes: string };
   box: { loadCellGrams: number; dfplaying: boolean; lastDispenseSlot: Slot | null };
@@ -48,7 +48,7 @@ const initial: State = {
   devices: { band: { online: false }, box: { online: false } },
   doses: {},
   emergency: null,
-  mqtt: { broker: "", port: 9001, connected: false },
+  mqtt: { broker: "", port: 8084, connected: false, user: "", pass: "" },
   telegram: { botToken: "", chatId: "" },
   checkup: { nextDate: "", doctor: "", notes: "" },
   box: { loadCellGrams: 0, dfplaying: false, lastDispenseSlot: null },
@@ -75,6 +75,13 @@ function load() {
         telegram: { ...initial.telegram, ...parsed.telegram },
         checkup: { ...initial.checkup, ...parsed.checkup },
       };
+      
+      // Auto-connect MQTT if broker is set
+      if (state.mqtt.broker) {
+        setTimeout(() => {
+          mqttConnect(state.mqtt.broker, state.mqtt.port, state.mqtt.user, state.mqtt.pass);
+        }, 100);
+      }
     }
   } catch {}
 }
@@ -198,7 +205,9 @@ export function fmtTime(t?: number) {
 }
 
 // ─── MQTT over WebSocket (connects browser to ESP32 box via Mosquitto) ────────
-let mqttWs: WebSocket | null = null;
+import mqttLib from "mqtt";
+
+let mqttClient: mqttLib.MqttClient | null = null;
 let mqttReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 function parseMqttPayload(topic: string, raw: string) {
@@ -230,86 +239,57 @@ function parseMqttPayload(topic: string, raw: string) {
   } catch {}
 }
 
-function mqttConnect(broker: string, port: number) {
-  if (mqttWs) { mqttWs.close(); mqttWs = null; }
+function mqttConnect(broker: string, port: number, user: string, pass: string) {
+  if (mqttClient) { mqttClient.end(); mqttClient = null; }
   if (!broker) return;
-  // Use wss:// for hostnames (cloud brokers like EMQX/HiveMQ), ws:// for IPs (local)
   const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(broker);
   const scheme = isIp ? "ws" : "wss";
   const url = `${scheme}://${broker}:${port}/mqtt`;
-  try { mqttWs = new WebSocket(url, ["mqtt"]); } catch { return; }
-  mqttWs.binaryType = "arraybuffer";
+  
+  const options: mqttLib.IClientOptions = { clientId: "smartdose-web-" + uid() };
+  if (user) options.username = user;
+  if (pass) options.password = pass;
 
-  mqttWs.onopen = () => {
-    const clientId = "smartdose-web-" + uid();
-    const enc = new TextEncoder();
-    const cid = enc.encode(clientId);
-    const pkt = new Uint8Array([
-      0x10, 14 + cid.length,
-      0x00, 0x04, 0x4d, 0x51, 0x54, 0x54,
-      0x04, 0x02, 0x00, 0x3c,
-      0x00, cid.length, ...cid,
+  mqttClient = mqttLib.connect(url, options);
+
+  mqttClient.on("connect", () => {
+    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: true } }));
+    handleDeviceEvent({ kind: "box", online: true });
+    mqttClient?.subscribe([
+      "smartmed/band/vitals", "smartmed/box/status",
+      "smartmed/box/loadcell", "smartmed/box/online", "smartmed/band/online"
     ]);
-    mqttWs!.send(pkt);
-  };
+  });
 
-  mqttWs.onmessage = (ev) => {
-    const buf = new Uint8Array(ev.data as ArrayBuffer);
-    if (buf[0] === 0x20) {
-      // CONNACK: connected!
-      setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: true } }));
-      handleDeviceEvent({ kind: "box", online: true });
-      // Subscribe to all topics
-      const topics = [
-        "smartmed/band/vitals", "smartmed/box/status",
-        "smartmed/box/loadcell", "smartmed/box/online", "smartmed/band/online",
-      ];
-      topics.forEach((t, i) => {
-        const tb = new TextEncoder().encode(t);
-        const pkt = new Uint8Array([0x82, 2 + 2 + tb.length + 1, 0x00, i + 1, 0x00, tb.length, ...tb, 0x00]);
-        mqttWs!.send(pkt);
-      });
-    } else if ((buf[0] & 0xf0) === 0x30) {
-      // PUBLISH received
-      let i = 1, remLen = 0, mult = 1;
-      do { remLen += (buf[i] & 0x7f) * mult; mult *= 128; } while (buf[i++] & 0x80);
-      const topicLen = (buf[i] << 8) | buf[i + 1]; i += 2;
-      const topic = new TextDecoder().decode(buf.slice(i, i + topicLen)); i += topicLen;
-      const payload = new TextDecoder().decode(buf.slice(i, i + remLen - 2 - topicLen));
-      parseMqttPayload(topic, payload);
-    }
-  };
+  mqttClient.on("message", (topic, payload) => {
+    parseMqttPayload(topic, payload.toString());
+  });
 
-  mqttWs.onclose = () => {
+  mqttClient.on("close", () => {
     setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
-    mqttWs = null;
-    mqttReconnectTimer = setTimeout(() => {
-      const { broker, port } = state.mqtt;
-      if (broker) mqttConnect(broker, port);
-    }, 5000);
-  };
+  });
 
-  mqttWs.onerror = () => mqttWs?.close();
+  mqttClient.on("error", () => {
+    mqttClient?.end();
+  });
 }
 
-export function connectMqtt(broker: string, port: number) {
-  setState((s) => ({ ...s, mqtt: { ...s.mqtt, broker, port } }));
-  mqttConnect(broker, port);
+export function connectMqtt(broker: string, port: number, user: string, pass: string) {
+  setState((s) => ({ ...s, mqtt: { ...s.mqtt, broker, port, user, pass } }));
+  mqttConnect(broker, port, user, pass);
 }
 
 export function disconnectMqtt() {
   if (mqttReconnectTimer) clearTimeout(mqttReconnectTimer);
-  mqttWs?.close();
-  mqttWs = null;
+  mqttClient?.end();
+  mqttClient = null;
   setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
 }
 
 export function publishMqtt(topic: string, payload: string) {
-  if (!mqttWs || mqttWs.readyState !== WebSocket.OPEN) return;
-  const tb = new TextEncoder().encode(topic);
-  const pb = new TextEncoder().encode(payload);
-  const pkt = new Uint8Array([0x30, tb.length + pb.length + 2, 0x00, tb.length, ...tb, ...pb]);
-  mqttWs.send(pkt);
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish(topic, payload);
+  }
 }
 
 // ─── Auto-Dispense Scheduler ─────────────────────────────────────────────────

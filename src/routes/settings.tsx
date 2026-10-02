@@ -24,6 +24,8 @@ function Settings() {
   const [perm, setPerm] = useState<string>("default");
   const [broker, setBroker] = useState(mqtt.broker);
   const [port, setPort] = useState(String(mqtt.port));
+  const [user, setUser] = useState(mqtt.user);
+  const [pass, setPass] = useState(mqtt.pass);
 
   useEffect(() => {
     if ("Notification" in window) setPerm(Notification.permission);
@@ -85,18 +87,26 @@ function Settings() {
             <Badge tone={mqtt.connected ? "ok" : "muted"} className="ml-auto">{mqtt.connected ? "Connected" : "Disconnected"}</Badge>
           </div>
           <p className="mb-4 text-xs text-muted-foreground">
-            Enter your Mosquitto broker's local IP address (the computer or Pi running the MQTT broker on the same Wi-Fi as the ESP32 box). Port 9001 is the standard WebSocket port.
+            Enter your EMQX Serverless connection details. Use the WebSocket port (usually 8084 for secure EMQX).
           </p>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Broker IP" className="col-span-2">
-              <input className={inputCls} placeholder="e.g. 192.168.1.100" value={broker} onChange={(e) => setBroker(e.target.value)} />
+          <div className="grid grid-cols-4 gap-3">
+            <Field label="Broker Address (Host)" className="col-span-3">
+              <input className={inputCls} placeholder="e.g. abc1234.ala.us-east-1.emqxsl.com" value={broker} onChange={(e) => setBroker(e.target.value)} />
             </Field>
             <Field label="WS Port">
               <input type="number" className={inputCls} value={port} onChange={(e) => setPort(e.target.value)} />
             </Field>
           </div>
-          <div className="mt-3 flex gap-2">
-            <Button className="flex-1" onClick={() => connectMqtt(broker, Number(port))} disabled={!broker}>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <Field label="Username">
+              <input className={inputCls} placeholder="e.g. smartdose" value={user} onChange={(e) => setUser(e.target.value)} />
+            </Field>
+            <Field label="Password">
+              <input type="password" className={inputCls} placeholder="e.g. secret123" value={pass} onChange={(e) => setPass(e.target.value)} />
+            </Field>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <Button className="flex-1" onClick={() => connectMqtt(broker, Number(port), user, pass)} disabled={!broker}>
               <Wifi size={15} /> Connect
             </Button>
             {mqtt.connected && (
@@ -109,6 +119,7 @@ function Settings() {
             </p>
           )}
         </Card>
+
 
         {/* Telegram Bot */}
         <Card>
