@@ -47,6 +47,26 @@ function Settings() {
       </Link>
 
       <div className="grid gap-4 lg:grid-cols-2">
+      
+        {/* Appearance (Theme) */}
+        <Card className="lg:col-span-2">
+          <h3 className="mb-4 font-semibold">Appearance & Theme</h3>
+          <div className="flex gap-6">
+            {(["light", "dark", "system"] as const).map((t) => (
+              <label key={t} className="flex cursor-pointer items-center gap-2">
+                <input 
+                  type="radio" 
+                  name="theme" 
+                  value={t} 
+                  checked={useStore(s => s.theme) === t} 
+                  onChange={() => setState(s => ({ ...s, theme: t }))} 
+                  className="h-4 w-4 text-primary accent-primary" 
+                />
+                <span className="text-sm capitalize font-medium">{t === "system" ? "Auto (System)" : t} Mode</span>
+              </label>
+            ))}
+          </div>
+        </Card>
 
         {/* Patient & Doctor */}
         <Card>

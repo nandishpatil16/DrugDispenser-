@@ -30,6 +30,7 @@ export type State = {
   telegram: { botToken: string; chatId: string };
   checkup: { nextDate: string; doctor: string; notes: string };
   box: { loadCellGrams: number; dfplaying: boolean; lastDispenseSlot: Slot | null };
+  theme: "light" | "dark" | "system";
 };
 
 const initial: State = {
@@ -52,6 +53,7 @@ const initial: State = {
   telegram: { botToken: "", chatId: "" },
   checkup: { nextDate: "", doctor: "", notes: "" },
   box: { loadCellGrams: 0, dfplaying: false, lastDispenseSlot: null },
+  theme: "system",
 };
 
 const KEY = "smartdose-state-v1";
