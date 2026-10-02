@@ -7,8 +7,8 @@ import { AdviceCard } from "@/components/AdviceCard";
 export const Route = createFileRoute("/vitals")({
   head: () => ({
     meta: [
-      { title: "Vitals — SmartDose Caregiver" },
-      { name: "description", content: "Heart rate, SpO2 and fall history from the patient band, with alert limits." },
+      { title: "Monitoring — SmartDose Caregiver" },
+      { name: "description", content: "Heart rate, Blood Oxygen and fall history from the patient band, with alert limits." },
     ],
   }),
   component: Vitals,
@@ -40,7 +40,7 @@ function Vitals() {
 
   return (
     <>
-      <PageHeader title="Vitals" sub="Readings streamed live from the patient monitoring band." />
+      <PageHeader title="Monitoring" sub="Readings streamed live from the patient monitoring band." />
 
       {/* Live Current Reading Banner */}
       <div className="mb-4 grid gap-4 sm:grid-cols-2">
@@ -67,7 +67,7 @@ function Vitals() {
             <Droplets size={26} className={spo2Low ? "text-destructive" : "text-primary"} />
           </div>
           <div>
-            <p className="text-sm font-semibold text-muted-foreground">Blood Oxygen (SpO₂)</p>
+            <p className="text-sm font-semibold text-muted-foreground">Blood Oxygen</p>
             <p className={`font-mono text-5xl font-black ${spo2Low ? "text-destructive" : "text-foreground"}`}>
               {last?.spo2 ?? "—"}<span className="ml-1 text-lg font-normal text-muted-foreground">%</span>
             </p>
@@ -100,7 +100,7 @@ function Vitals() {
       {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card><h3 className="mb-3 font-semibold">Heart rate history (bpm)</h3><Chart data={s.readings} k="hr" min={s.limits.hrMin} max={s.limits.hrMax} color="var(--primary)" /></Card>
-        <Card><h3 className="mb-3 font-semibold">SpO₂ history (%)</h3><Chart data={s.readings} k="spo2" min={s.limits.spo2Min} max={100} color="var(--chart-2)" /></Card>
+        <Card><h3 className="mb-3 font-semibold">Blood Oxygen history (%)</h3><Chart data={s.readings} k="spo2" min={s.limits.spo2Min} max={100} color="var(--chart-2)" /></Card>
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -111,7 +111,7 @@ function Vitals() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Min heart rate"><input type="number" className={inputCls} value={s.limits.hrMin} onChange={(e) => setL("hrMin", e.target.value)} /></Field>
             <Field label="Max heart rate"><input type="number" className={inputCls} value={s.limits.hrMax} onChange={(e) => setL("hrMax", e.target.value)} /></Field>
-            <Field label="Min SpO₂ %"><input type="number" className={inputCls} value={s.limits.spo2Min} onChange={(e) => setL("spo2Min", e.target.value)} /></Field>
+            <Field label="Min Blood Oxygen %"><input type="number" className={inputCls} value={s.limits.spo2Min} onChange={(e) => setL("spo2Min", e.target.value)} /></Field>
           </div>
         </Card>
 

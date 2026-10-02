@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
-import { Activity, Bell, CalendarClock, LayoutDashboard, Settings } from "lucide-react";
+import { Activity, Bell, CalendarClock, LayoutDashboard, Settings, Menu } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 const NAV = [
@@ -58,10 +58,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="px-4 pb-24 pt-5 md:ml-64 md:px-10 md:pb-10 md:pt-8">
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
-      <Link to="/settings" aria-label="Settings"
-        className="fixed right-4 top-4 z-40 grid h-10 w-10 place-items-center rounded-md border bg-card text-muted-foreground shadow-[var(--shadow-card)] md:hidden">
-        <Settings size={19} />
-      </Link>
+      {/* Mobile Top Header */}
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur md:hidden">
+        <div className="flex items-center gap-2">
+          <div className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground">
+            <Bell size={16} />
+          </div>
+          <span className="font-bold">SmartDose</span>
+        </div>
+        <Link to="/settings" aria-label="Settings" className="grid h-9 w-9 place-items-center rounded-md text-muted-foreground hover:bg-muted">
+          <Menu size={22} />
+        </Link>
+      </header>
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t bg-card/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         {NAV.map((n) => (
           <Link key={n.to} to={n.to} activeOptions={{ exact: n.to === "/" }}
