@@ -271,16 +271,28 @@ function mqttConnect(broker: string, port: number, user: string, pass: string) {
   mqttClient = mqttLib.connect(url, options);
 
   mqttClient.on("connect", () => {
-    setState((s) => ({ 
-      ...s, 
-      mqtt: { ...s.mqtt, connected: true },
-      // Reset devices to offline; we will rely on retained MQTT messages to tell us if they are online
-      devices: { band: { ...s.devices.band, online: false }, box: { ...s.devices.box, online: false } }
-    }));
+    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: true } }));
+
+    // Subscribe to all topics first, THEN reset device state.
+    // This guarantees we are listening before EMQX delivers retained messages.
     mqttClient?.subscribe([
-      "smartmed/band/vitals", "smartmed/box/status",
-      "smartmed/box/loadcell", "smartmed/box/online", "smartmed/band/online"
-    ]);
+      "smartmed/band/vitals",
+      "smartmed/box/status",
+      "smartmed/box/loadcell",
+      "smartmed/box/online",
+      "smartmed/band/online",
+    ], () => {
+      // Subscription confirmed by broker. Now reset devices to offline.
+      // The retained "1" messages from EMQX will arrive immediately after
+      // this callback and set the correct online status.
+      setState((s) => ({
+        ...s,
+        devices: {
+          band: { ...s.devices.band, online: false },
+          box:  { ...s.devices.box,  online: false },
+        },
+      }));
+    });
   });
 
   mqttClient.on("message", (topic, payload) => {
