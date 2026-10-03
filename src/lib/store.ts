@@ -152,14 +152,30 @@ export function handleDeviceEvent(e: DeviceEvent) {
   const now = Date.now();
   switch (e.kind) {
     case "vitals": {
+      // Filter out 0 values as they mean "no finger detected"
+      const hr = e.hr && e.hr > 0 ? e.hr : undefined;
+      const spo2 = e.spo2 && e.spo2 > 0 ? e.spo2 : undefined;
+      
       setState((s) => ({
         ...s,
-        readings: [...s.readings, { at: now, hr: e.hr, spo2: e.spo2 }].slice(-500),
+        readings: [...s.readings, { at: now, hr, spo2 }].slice(-500),
         devices: { ...s.devices, band: { online: true, battery: e.battery ?? s.devices.band.battery, lastSync: now } },
       }));
+      
       const l = state.limits;
-      if (e.hr != null && (e.hr < l.hrMin || e.hr > l.hrMax)) pushAlert("heart", `Abnormal heart rate: ${e.hr} bpm`, true);
-      if (e.spo2 != null && e.spo2 < l.spo2Min) pushAlert("spo2", `Low SpO2: ${e.spo2}%`, true);
+      // Prevent spamming alerts every 500ms by checking if we recently alerted
+      const lastAlerts = state.alerts.filter(a => now - a.at < 60000); // alerts in last 60s
+      
+      if (hr != null && (hr < l.hrMin || hr > l.hrMax)) {
+        if (!lastAlerts.some(a => a.type === "heart")) {
+          pushAlert("heart", `Abnormal heart rate: ${hr} bpm`, true);
+        }
+      }
+      if (spo2 != null && spo2 < l.spo2Min) {
+        if (!lastAlerts.some(a => a.type === "spo2")) {
+          pushAlert("spo2", `Low SpO2: ${spo2}%`, true);
+        }
+      }
       break;
     }
     case "fall":
