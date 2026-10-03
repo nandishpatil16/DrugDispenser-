@@ -56,7 +56,7 @@ const initial: State = {
   theme: "system",
 };
 
-const KEY = "smartdose-state-v1";
+const KEY = "smartdose-state-v2";
 let state: State = initial;
 let loaded = false;
 const subs = new Set<() => void>();
