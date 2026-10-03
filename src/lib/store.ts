@@ -257,50 +257,119 @@ function parseMqttPayload(topic: string, raw: string) {
   } catch {}
 }
 
+// Watchdog timers — if no message arrives within timeout, device is offline
+let boxWatchdog:  ReturnType<typeof setInterval> | null = null;
+let bandWatchdog: ReturnType<typeof setInterval> | null = null;
+let lastBoxMsg  = 0;
+let lastBandMsg = 0;
+const DEVICE_TIMEOUT_MS = 20000; // 20 seconds
+
+function startWatchdogs() {
+  // Clear any existing watchdogs
+  if (boxWatchdog)  clearInterval(boxWatchdog);
+  if (bandWatchdog) clearInterval(bandWatchdog);
+
+  // Box watchdog — checks every 5 seconds
+  boxWatchdog = setInterval(() => {
+    const isOnline = lastBoxMsg > 0 && Date.now() - lastBoxMsg < DEVICE_TIMEOUT_MS;
+    if (!isOnline && state.devices.box.online) {
+      setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: false } } }));
+    }
+  }, 5000);
+
+  // Band watchdog — checks every 5 seconds
+  bandWatchdog = setInterval(() => {
+    const isOnline = lastBandMsg > 0 && Date.now() - lastBandMsg < DEVICE_TIMEOUT_MS;
+    if (!isOnline && state.devices.band.online) {
+      setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: false } } }));
+    }
+  }, 5000);
+}
+
+function stopWatchdogs() {
+  if (boxWatchdog)  { clearInterval(boxWatchdog);  boxWatchdog  = null; }
+  if (bandWatchdog) { clearInterval(bandWatchdog); bandWatchdog = null; }
+  lastBoxMsg  = 0;
+  lastBandMsg = 0;
+}
+
 function mqttConnect(broker: string, port: number, user: string, pass: string) {
   if (mqttClient) { mqttClient.end(); mqttClient = null; }
+  stopWatchdogs();
   if (!broker) return;
   const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(broker);
   const scheme = isIp ? "ws" : "wss";
   const url = `${scheme}://${broker}:${port}/mqtt`;
-  
-  const options: mqttLib.IClientOptions = { clientId: "smartdose-web-" + uid() };
+
+  const options: mqttLib.IClientOptions = {
+    clientId: "smartdose-web-" + uid(),
+    keepalive: 30,
+    reconnectPeriod: 3000,
+  };
   if (user) options.username = user;
   if (pass) options.password = pass;
 
   mqttClient = mqttLib.connect(url, options);
 
   mqttClient.on("connect", () => {
-    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: true } }));
+    // Mark MQTT as connected, but devices start as OFFLINE.
+    // Watchdog timers will flip them to online the moment ANY message arrives.
+    setState((s) => ({
+      ...s,
+      mqtt: { ...s.mqtt, connected: true },
+      devices: {
+        band: { ...s.devices.band, online: false },
+        box:  { ...s.devices.box,  online: false },
+      },
+    }));
 
-    // Subscribe to all topics first, THEN reset device state.
-    // This guarantees we are listening before EMQX delivers retained messages.
+    lastBoxMsg  = 0;
+    lastBandMsg = 0;
+
     mqttClient?.subscribe([
       "smartmed/band/vitals",
       "smartmed/box/status",
       "smartmed/box/loadcell",
       "smartmed/box/online",
       "smartmed/band/online",
-    ], () => {
-      // Subscription confirmed by broker. Now reset devices to offline.
-      // The retained "1" messages from EMQX will arrive immediately after
-      // this callback and set the correct online status.
-      setState((s) => ({
-        ...s,
-        devices: {
-          band: { ...s.devices.band, online: false },
-          box:  { ...s.devices.box,  online: false },
-        },
-      }));
-    });
+    ]);
+
+    // Start watchdog timers
+    startWatchdogs();
   });
 
   mqttClient.on("message", (topic, payload) => {
-    parseMqttPayload(topic, payload.toString());
+    const raw = payload.toString();
+
+    // Any message from box topics = box is alive
+    if (topic.startsWith("smartmed/box/")) {
+      lastBoxMsg = Date.now();
+      if (!state.devices.box.online) {
+        setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: true, lastSync: Date.now() } } }));
+      }
+    }
+
+    // Any message from band topics = band is alive
+    if (topic.startsWith("smartmed/band/")) {
+      lastBandMsg = Date.now();
+      if (!state.devices.band.online) {
+        setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: true, lastSync: Date.now() } } }));
+      }
+    }
+
+    parseMqttPayload(topic, raw);
   });
 
   mqttClient.on("close", () => {
-    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
+    stopWatchdogs();
+    setState((s) => ({
+      ...s,
+      mqtt: { ...s.mqtt, connected: false },
+      devices: {
+        band: { ...s.devices.band, online: false },
+        box:  { ...s.devices.box,  online: false },
+      },
+    }));
   });
 
   mqttClient.on("error", () => {
