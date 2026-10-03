@@ -234,9 +234,9 @@ function parseMqttPayload(topic: string, raw: string) {
     } else if (topic === "smartmed/box/loadcell") {
       handleDeviceEvent({ kind: "loadcell", grams: parseFloat(raw) });
     } else if (topic === "smartmed/box/online") {
-      handleDeviceEvent({ kind: "box", online: raw === "1" });
+      handleDeviceEvent({ kind: "box", online: raw.trim() === "1" });
     } else if (topic === "smartmed/band/online") {
-      handleDeviceEvent({ kind: "band", online: raw === "1" });
+      handleDeviceEvent({ kind: "band", online: raw.trim() === "1" });
     }
   } catch {}
 }
@@ -255,8 +255,12 @@ function mqttConnect(broker: string, port: number, user: string, pass: string) {
   mqttClient = mqttLib.connect(url, options);
 
   mqttClient.on("connect", () => {
-    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: true } }));
-    handleDeviceEvent({ kind: "box", online: true });
+    setState((s) => ({ 
+      ...s, 
+      mqtt: { ...s.mqtt, connected: true },
+      // Reset devices to offline; we will rely on retained MQTT messages to tell us if they are online
+      devices: { band: { ...s.devices.band, online: false }, box: { ...s.devices.box, online: false } }
+    }));
     mqttClient?.subscribe([
       "smartmed/band/vitals", "smartmed/box/status",
       "smartmed/box/loadcell", "smartmed/box/online", "smartmed/band/online"
