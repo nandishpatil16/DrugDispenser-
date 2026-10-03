@@ -11,7 +11,7 @@ export type Medicine = { id: string; name: string; mg: number; compartment: stri
 export type SlotPlan = { time: string; enabled: boolean; items: { medId: string; qty: number }[] };
 export type AlertType = "sos" | "fall" | "heart" | "spo2" | "dose" | "offline";
 export type Alert = { id: string; type: AlertType; message: string; at: number; ack: boolean };
-export type Reading = { at: number; hr?: number | undefined; spo2?: number | undefined };
+export type Reading = { at: number; hr?: number; spo2?: number };
 export type DoseStatus = "scheduled" | "dispensed" | "removed" | "not_removed";
 
 export type State = {
@@ -23,7 +23,10 @@ export type State = {
   alerts: Alert[];
   readings: Reading[];
   falls: number[];
-  devices: { band: { online: boolean; battery?: number | undefined; lastSync?: number | undefined }; box: { online: boolean; tray?: string | undefined; lastSync?: number | undefined } };
+  devices: {
+    band: { online: boolean; battery?: number; lastSync?: number };
+    box:  { online: boolean; tray?: string; lastSync?: number };
+  };
   doses: Partial<Record<Slot, DoseStatus>>;
   emergency: Alert | null;
   mqtt: { broker: string; port: number; connected: boolean; user: string; pass: string };
@@ -36,54 +39,88 @@ export type State = {
 const initial: State = {
   medicines: [],
   schedule: {
-    morning: { time: "08:00", enabled: true, items: [] },
+    morning:   { time: "08:00", enabled: true, items: [] },
     afternoon: { time: "14:00", enabled: true, items: [] },
-    night: { time: "21:00", enabled: true, items: [] },
+    night:     { time: "21:00", enabled: true, items: [] },
   },
-  reminder: { vibration: true, alarm: true },
-  limits: { hrMin: 50, hrMax: 110, spo2Min: 92 },
-  patient: { name: "", age: "", doctor: "", doctorPhone: "", patientPhone: "" },
-  alerts: [],
-  readings: [],
-  falls: [],
-  devices: { band: { online: false }, box: { online: false } },
-  doses: {},
+  reminder:  { vibration: true, alarm: true },
+  limits:    { hrMin: 50, hrMax: 110, spo2Min: 92 },
+  patient:   { name: "", age: "", doctor: "", doctorPhone: "", patientPhone: "" },
+  alerts:    [],
+  readings:  [],
+  falls:     [],
+  devices:   { band: { online: false }, box: { online: false } },
+  doses:     {},
   emergency: null,
-  mqtt: { broker: "", port: 8084, connected: false, user: "", pass: "" },
-  telegram: { botToken: "", chatId: "" },
-  checkup: { nextDate: "", doctor: "", notes: "" },
-  box: { loadCellGrams: 0, dfplaying: false, lastDispenseSlot: null },
-  theme: "system",
+  mqtt:      { broker: "", port: 8084, connected: false, user: "", pass: "" },
+  telegram:  { botToken: "", chatId: "" },
+  checkup:   { nextDate: "", doctor: "", notes: "" },
+  box:       { loadCellGrams: 0, dfplaying: false, lastDispenseSlot: null },
+  theme:     "system",
 };
 
-const KEY = "smartdose-state-v2";
+// ─── Two separate storage keys ────────────────────────────────────────────────
+// CREDS_KEY never changes — credentials survive any app version bump forever.
+// STATE_KEY can be bumped to wipe other state (alerts, readings) without
+// deleting the user's broker address / password.
+const CREDS_KEY = "smartdose-creds-v1";   // ← never change this key
+const STATE_KEY = "smartdose-state-v3";   // ← bump this if you need to reset
+
 let state: State = initial;
 let loaded = false;
 const subs = new Set<() => void>();
+
+// ─── Persist / load helpers ───────────────────────────────────────────────────
+function loadCreds(): { broker: string; port: number; user: string; pass: string } | null {
+  try {
+    const raw = localStorage.getItem(CREDS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveCreds(broker: string, port: number, user: string, pass: string) {
+  try { localStorage.setItem(CREDS_KEY, JSON.stringify({ broker, port, user, pass })); } catch {}
+}
 
 function load() {
   if (loaded || typeof window === "undefined") return;
   loaded = true;
   try {
-    const raw = localStorage.getItem(KEY);
+    // Always load credentials first from their dedicated key
+    const creds = loadCreds();
+
+    const raw = localStorage.getItem(STATE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       state = {
         ...initial,
         ...parsed,
         emergency: null,
-        mqtt: { ...initial.mqtt, ...parsed.mqtt, connected: false },
-        box: { ...initial.box, ...parsed.box },
+        devices: { band: { online: false }, box: { online: false } },
+        // Merge credentials: prefer dedicated creds key, fall back to parsed state
+        mqtt: {
+          ...initial.mqtt,
+          ...(creds ?? {}),
+          ...(parsed.mqtt ?? {}),
+          ...(creds ?? {}),   // creds key always wins
+          connected: false,
+        },
+        box:      { ...initial.box,      ...parsed.box },
         telegram: { ...initial.telegram, ...parsed.telegram },
-        checkup: { ...initial.checkup, ...parsed.checkup },
+        checkup:  { ...initial.checkup,  ...parsed.checkup },
       };
-      
-      // Auto-connect MQTT if broker is set
-      if (state.mqtt.broker) {
-        setTimeout(() => {
-          mqttConnect(state.mqtt.broker, state.mqtt.port, state.mqtt.user, state.mqtt.pass);
-        }, 100);
-      }
+    } else if (creds) {
+      state = {
+        ...initial,
+        mqtt: { ...initial.mqtt, ...creds, connected: false },
+      };
+    }
+
+    // Auto-connect MQTT if broker is saved
+    if (state.mqtt.broker) {
+      setTimeout(() => {
+        mqttConnect(state.mqtt.broker, state.mqtt.port, state.mqtt.user, state.mqtt.pass);
+      }, 300);
     }
   } catch {}
 }
@@ -91,19 +128,13 @@ function load() {
 export function setState(fn: (s: State) => State) {
   load();
   state = fn(state);
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-  } catch {}
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch {}
   subs.forEach((f) => f());
 }
 
 export function useStore<T>(sel: (s: State) => T): T {
   return useSyncExternalStore(
-    (cb) => {
-      subs.add(cb);
-      if (!loaded) { load(); cb(); }
-      return () => subs.delete(cb);
-    },
+    (cb) => { subs.add(cb); if (!loaded) { load(); cb(); } return () => subs.delete(cb); },
     () => sel(state),
     () => sel(initial),
   );
@@ -118,6 +149,7 @@ export function slotTotalMg(s: State, slot: Slot) {
   }, 0);
 }
 
+// ─── Alert helpers ─────────────────────────────────────────────────────────────
 function pushAlert(type: AlertType, message: string, emergency = false) {
   const a: Alert = { id: uid(), type, message, at: Date.now(), ack: false };
   setState((s) => ({ ...s, alerts: [a, ...s.alerts].slice(0, 200) }));
@@ -138,12 +170,20 @@ function beep() {
   } catch {}
 }
 
+// ─── Alert throttle — one alert per type per 60 seconds ───────────────────────
+function pushAlertThrottled(type: AlertType, message: string, emergency = false) {
+  const now = Date.now();
+  const recentSameType = state.alerts.find(a => a.type === type && now - a.at < 60_000);
+  if (!recentSameType) pushAlert(type, message, emergency);
+}
+
+// ─── Device events ─────────────────────────────────────────────────────────────
 export type DeviceEvent =
   | { kind: "vitals"; hr?: number; spo2?: number; battery?: number }
   | { kind: "fall" }
   | { kind: "sos" }
   | { kind: "dose"; slot: Slot; status: DoseStatus }
-  | { kind: "box"; online: boolean; tray?: string | undefined }
+  | { kind: "box"; online: boolean; tray?: string }
   | { kind: "band"; online: boolean }
   | { kind: "loadcell"; grams: number }
   | { kind: "dfplayer"; playing: boolean };
@@ -152,30 +192,21 @@ export function handleDeviceEvent(e: DeviceEvent) {
   const now = Date.now();
   switch (e.kind) {
     case "vitals": {
-      // Filter out 0 values as they mean "no finger detected"
-      const hr = e.hr && e.hr > 0 ? e.hr : undefined;
-      const spo2 = e.spo2 && e.spo2 > 0 ? e.spo2 : undefined;
-      
+      // Ignore zero — means no finger on sensor
+      const hr   = (e.hr   && e.hr   > 0) ? e.hr   : undefined;
+      const spo2 = (e.spo2 && e.spo2 > 0) ? e.spo2 : undefined;
+
       setState((s) => ({
         ...s,
         readings: [...s.readings, { at: now, hr, spo2 }].slice(-500),
         devices: { ...s.devices, band: { online: true, battery: e.battery ?? s.devices.band.battery, lastSync: now } },
       }));
-      
+
       const l = state.limits;
-      // Prevent spamming alerts every 500ms by checking if we recently alerted
-      const lastAlerts = state.alerts.filter(a => now - a.at < 60000); // alerts in last 60s
-      
-      if (hr != null && (hr < l.hrMin || hr > l.hrMax)) {
-        if (!lastAlerts.some(a => a.type === "heart")) {
-          pushAlert("heart", `Abnormal heart rate: ${hr} bpm`, true);
-        }
-      }
-      if (spo2 != null && spo2 < l.spo2Min) {
-        if (!lastAlerts.some(a => a.type === "spo2")) {
-          pushAlert("spo2", `Low SpO2: ${spo2}%`, true);
-        }
-      }
+      if (hr   != null && (hr < l.hrMin || hr > l.hrMax))
+        pushAlertThrottled("heart", `Abnormal heart rate: ${hr} bpm`, true);
+      if (spo2 != null && spo2 < l.spo2Min)
+        pushAlertThrottled("spo2", `Low blood oxygen: ${spo2}%`, true);
       break;
     }
     case "fall":
@@ -191,11 +222,11 @@ export function handleDeviceEvent(e: DeviceEvent) {
       break;
     case "box":
       setState((s) => ({ ...s, devices: { ...s.devices, box: { online: e.online, tray: e.tray, lastSync: now } } }));
-      if (!e.online) pushAlert("offline", "Dispenser box went offline");
+      if (!e.online) pushAlertThrottled("offline", "Dispenser box went offline");
       break;
     case "band":
       setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: e.online } } }));
-      if (!e.online) pushAlert("offline", "Monitoring band went offline");
+      if (!e.online) pushAlertThrottled("offline", "Monitoring band went offline");
       break;
     case "loadcell":
       setState((s) => ({ ...s, box: { ...s.box, loadCellGrams: e.grams } }));
@@ -210,11 +241,14 @@ export type Advice = { level: "routine" | "soon" | "immediate"; text: string };
 export function checkupAdvice(s: State): Advice | null {
   const week = Date.now() - 7 * 864e5;
   const recent = s.readings.filter((r) => r.at > week);
-  if (s.falls.some((f) => f > week)) return { level: "immediate", text: "A fall was detected this week. Arrange a medical examination as soon as possible." };
-  const abnHr = recent.filter((r) => r.hr != null && (r.hr < s.limits.hrMin || r.hr > s.limits.hrMax)).length;
-  const lowO2 = recent.filter((r) => r.spo2 != null && r.spo2 < s.limits.spo2Min).length;
-  if (abnHr >= 5 || lowO2 >= 3) return { level: "immediate", text: "Repeated abnormal readings in the last 7 days. Consult a doctor today." };
-  if (abnHr >= 2 || lowO2 >= 1) return { level: "soon", text: "Some readings were outside safe limits. Book a checkup within the next few days." };
+  if (s.falls.some((f) => f > week))
+    return { level: "immediate", text: "A fall was detected this week. Arrange a medical examination as soon as possible." };
+  const abnHr = recent.filter((r) => r.hr != null && (r.hr! < s.limits.hrMin || r.hr! > s.limits.hrMax)).length;
+  const lowO2 = recent.filter((r) => r.spo2 != null && r.spo2! < s.limits.spo2Min).length;
+  if (abnHr >= 5 || lowO2 >= 3)
+    return { level: "immediate", text: "Repeated abnormal readings in the last 7 days. Consult a doctor today." };
+  if (abnHr >= 2 || lowO2 >= 1)
+    return { level: "soon", text: "Some readings were outside safe limits. Book a checkup within the next few days." };
   return null;
 }
 
@@ -222,19 +256,51 @@ export function fmtTime(t?: number) {
   return t ? new Date(t).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—";
 }
 
-// ─── MQTT over WebSocket (connects browser to ESP32 box via Mosquitto) ────────
+// ─── MQTT ─────────────────────────────────────────────────────────────────────
 import mqttLib from "mqtt";
 
 let mqttClient: mqttLib.MqttClient | null = null;
-let mqttReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Watchdog: marks device offline if no MQTT message received for 20 seconds
+let boxWatchdog:  ReturnType<typeof setInterval> | null = null;
+let bandWatchdog: ReturnType<typeof setInterval> | null = null;
+let lastBoxMsg  = 0;
+let lastBandMsg = 0;
+const DEVICE_TIMEOUT_MS = 20_000;
+
+function startWatchdogs() {
+  if (boxWatchdog)  clearInterval(boxWatchdog);
+  if (bandWatchdog) clearInterval(bandWatchdog);
+
+  boxWatchdog = setInterval(() => {
+    if (lastBoxMsg > 0 && Date.now() - lastBoxMsg > DEVICE_TIMEOUT_MS && state.devices.box.online) {
+      setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: false } } }));
+      pushAlertThrottled("offline", "Dispenser box went offline");
+    }
+  }, 5000);
+
+  bandWatchdog = setInterval(() => {
+    if (lastBandMsg > 0 && Date.now() - lastBandMsg > DEVICE_TIMEOUT_MS && state.devices.band.online) {
+      setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: false } } }));
+      pushAlertThrottled("offline", "Monitoring band went offline");
+    }
+  }, 5000);
+}
+
+function stopWatchdogs() {
+  if (boxWatchdog)  { clearInterval(boxWatchdog);  boxWatchdog  = null; }
+  if (bandWatchdog) { clearInterval(bandWatchdog); bandWatchdog = null; }
+  lastBoxMsg  = 0;
+  lastBandMsg = 0;
+}
 
 function parseMqttPayload(topic: string, raw: string) {
   try {
     if (topic === "smartmed/band/vitals") {
       const d = JSON.parse(raw);
-      if (d.fall) handleDeviceEvent({ kind: "fall" });
+      if (d.fall)      handleDeviceEvent({ kind: "fall" });
       if (d.emergency) handleDeviceEvent({ kind: "sos" });
-      handleDeviceEvent({ kind: "vitals", hr: d.hr, spo2: d.spo2 });
+      handleDeviceEvent({ kind: "vitals", hr: d.hr ?? 0, spo2: d.spo2 ?? 0 });
     } else if (topic === "smartmed/box/status") {
       const slot = state.box.lastDispenseSlot ?? "morning";
       if (raw === "DISPENSED") {
@@ -248,72 +314,34 @@ function parseMqttPayload(topic: string, raw: string) {
         handleDeviceEvent({ kind: "dose", slot, status: "not_removed" });
       }
     } else if (topic === "smartmed/box/loadcell") {
-      handleDeviceEvent({ kind: "loadcell", grams: parseFloat(raw) });
-    } else if (topic === "smartmed/box/online") {
-      handleDeviceEvent({ kind: "box", online: raw.trim() === "1" });
-    } else if (topic === "smartmed/band/online") {
-      handleDeviceEvent({ kind: "band", online: raw.trim() === "1" });
+      const g = parseFloat(raw);
+      if (!isNaN(g)) handleDeviceEvent({ kind: "loadcell", grams: g });
     }
+    // smartmed/box/online and smartmed/band/online are handled
+    // directly in the message handler below via the watchdog
   } catch {}
 }
 
-// Watchdog timers — if no message arrives within timeout, device is offline
-let boxWatchdog:  ReturnType<typeof setInterval> | null = null;
-let bandWatchdog: ReturnType<typeof setInterval> | null = null;
-let lastBoxMsg  = 0;
-let lastBandMsg = 0;
-const DEVICE_TIMEOUT_MS = 20000; // 20 seconds
-
-function startWatchdogs() {
-  // Clear any existing watchdogs
-  if (boxWatchdog)  clearInterval(boxWatchdog);
-  if (bandWatchdog) clearInterval(bandWatchdog);
-
-  // Box watchdog — checks every 5 seconds
-  boxWatchdog = setInterval(() => {
-    const isOnline = lastBoxMsg > 0 && Date.now() - lastBoxMsg < DEVICE_TIMEOUT_MS;
-    if (!isOnline && state.devices.box.online) {
-      setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: false } } }));
-    }
-  }, 5000);
-
-  // Band watchdog — checks every 5 seconds
-  bandWatchdog = setInterval(() => {
-    const isOnline = lastBandMsg > 0 && Date.now() - lastBandMsg < DEVICE_TIMEOUT_MS;
-    if (!isOnline && state.devices.band.online) {
-      setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: false } } }));
-    }
-  }, 5000);
-}
-
-function stopWatchdogs() {
-  if (boxWatchdog)  { clearInterval(boxWatchdog);  boxWatchdog  = null; }
-  if (bandWatchdog) { clearInterval(bandWatchdog); bandWatchdog = null; }
-  lastBoxMsg  = 0;
-  lastBandMsg = 0;
-}
-
 function mqttConnect(broker: string, port: number, user: string, pass: string) {
-  if (mqttClient) { mqttClient.end(); mqttClient = null; }
+  if (mqttClient) { mqttClient.end(true); mqttClient = null; }
   stopWatchdogs();
   if (!broker) return;
+
   const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(broker);
   const scheme = isIp ? "ws" : "wss";
   const url = `${scheme}://${broker}:${port}/mqtt`;
 
-  const options: mqttLib.IClientOptions = {
-    clientId: "smartdose-web-" + uid(),
-    keepalive: 30,
-    reconnectPeriod: 3000,
-  };
-  if (user) options.username = user;
-  if (pass) options.password = pass;
-
-  mqttClient = mqttLib.connect(url, options);
+  mqttClient = mqttLib.connect(url, {
+    clientId:        "smartdose-web-" + uid(),
+    username:        user || undefined,
+    password:        pass || undefined,
+    keepalive:       30,
+    reconnectPeriod: 5000,
+    connectTimeout:  10_000,
+  });
 
   mqttClient.on("connect", () => {
-    // Mark MQTT as connected, but devices start as OFFLINE.
-    // Watchdog timers will flip them to online the moment ANY message arrives.
+    // Connected — devices start offline, watchdog will flip online on first message
     setState((s) => ({
       ...s,
       mqtt: { ...s.mqtt, connected: true },
@@ -322,38 +350,43 @@ function mqttConnect(broker: string, port: number, user: string, pass: string) {
         box:  { ...s.devices.box,  online: false },
       },
     }));
-
     lastBoxMsg  = 0;
     lastBandMsg = 0;
 
     mqttClient?.subscribe([
       "smartmed/band/vitals",
+      "smartmed/band/online",
       "smartmed/box/status",
       "smartmed/box/loadcell",
       "smartmed/box/online",
-      "smartmed/band/online",
     ]);
 
-    // Start watchdog timers
     startWatchdogs();
+    console.log("[MQTT] Connected to", url);
   });
 
   mqttClient.on("message", (topic, payload) => {
-    const raw = payload.toString();
+    const raw = payload.toString().trim();
 
-    // Any message from box topics = box is alive
+    // Any message on a box topic → box is alive
     if (topic.startsWith("smartmed/box/")) {
       lastBoxMsg = Date.now();
       if (!state.devices.box.online) {
-        setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: true, lastSync: Date.now() } } }));
+        setState((s) => ({
+          ...s,
+          devices: { ...s.devices, box: { ...s.devices.box, online: true, lastSync: Date.now() } },
+        }));
       }
     }
 
-    // Any message from band topics = band is alive
+    // Any message on a band topic → band is alive
     if (topic.startsWith("smartmed/band/")) {
       lastBandMsg = Date.now();
       if (!state.devices.band.online) {
-        setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: true, lastSync: Date.now() } } }));
+        setState((s) => ({
+          ...s,
+          devices: { ...s.devices, band: { ...s.devices.band, online: true, lastSync: Date.now() } },
+        }));
       }
     }
 
@@ -370,56 +403,50 @@ function mqttConnect(broker: string, port: number, user: string, pass: string) {
         box:  { ...s.devices.box,  online: false },
       },
     }));
+    console.log("[MQTT] Disconnected");
   });
 
-  mqttClient.on("error", () => {
-    mqttClient?.end();
+  mqttClient.on("error", (err) => {
+    console.error("[MQTT] Error:", err.message);
   });
 }
 
 export function connectMqtt(broker: string, port: number, user: string, pass: string) {
+  // Save credentials to their own permanent key so they survive any state reset
+  saveCreds(broker, port, user, pass);
   setState((s) => ({ ...s, mqtt: { ...s.mqtt, broker, port, user, pass } }));
   mqttConnect(broker, port, user, pass);
 }
 
 export function disconnectMqtt() {
-  if (mqttReconnectTimer) clearTimeout(mqttReconnectTimer);
-  mqttClient?.end();
+  stopWatchdogs();
+  mqttClient?.end(true);
   mqttClient = null;
   setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
 }
 
 export function publishMqtt(topic: string, payload: string) {
-  if (mqttClient && mqttClient.connected) {
-    mqttClient.publish(topic, payload);
-  }
+  if (mqttClient?.connected) mqttClient.publish(topic, payload);
 }
 
-// ─── Auto-Dispense Scheduler ─────────────────────────────────────────────────
-// Runs every 30 seconds. When current HH:MM matches a slot's scheduled time,
-// fires DISPENSE_MORNING / DISPENSE_AFTERNOON / DISPENSE_NIGHT over MQTT.
-// Prevents double-firing using a per-day fired-set keyed by date+slot.
+// ─── Auto-Dispense Scheduler ──────────────────────────────────────────────────
+const dispatchedToday = new Set<string>();
 
-const dispatchedToday: Set<string> = new Set();
-
-/** Call this whenever a slot's time is changed so the new time can fire today. */
 export function clearDispatchCache(slot?: Slot) {
+  const todayKey = new Date().toISOString().slice(0, 10);
   if (slot) {
-    const todayKey = new Date().toISOString().slice(0, 10);
     dispatchedToday.delete(`${todayKey}-${slot}`);
   } else {
-    const todayKey = new Date().toISOString().slice(0, 10);
     dispatchedToday.delete(`${todayKey}-morning`);
     dispatchedToday.delete(`${todayKey}-afternoon`);
     dispatchedToday.delete(`${todayKey}-night`);
   }
 }
 
-/** Immediately dispense a specific slot (manual override from web app). */
 export function manualDispense(slot: Slot) {
   if (!state.mqtt.connected) return;
   const todayKey = new Date().toISOString().slice(0, 10);
-  dispatchedToday.add(`${todayKey}-${slot}`); // prevent auto-fire from double-firing
+  dispatchedToday.add(`${todayKey}-${slot}`);
   setState((s) => ({ ...s, box: { ...s.box, lastDispenseSlot: slot } }));
   publishMqtt("smartmed/box/command", `DISPENSE_${slot.toUpperCase()}`);
   handleDeviceEvent({ kind: "dose", slot, status: "dispensed" });
@@ -432,12 +459,10 @@ function checkDispenseSchedule() {
   const todayKey = now.toISOString().slice(0, 10);
   const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-  // Reset the fired set at midnight
   const resetKey = `reset-${todayKey}`;
   if (!dispatchedToday.has(resetKey)) {
     dispatchedToday.clear();
     dispatchedToday.add(resetKey);
-    // Also reset all dose statuses for a new day
     setState((s) => ({ ...s, doses: {} }));
   }
 
@@ -458,9 +483,6 @@ function checkDispenseSchedule() {
 }
 
 // ─── Missed-Dose Watchdog ─────────────────────────────────────────────────────
-// If a slot stays in "dispensed" state for more than 15 minutes without the
-// patient picking it up, mark it as not_removed and push an alert.
-
 const MISSED_WINDOW_MS = 15 * 60 * 1000;
 const dispensedAt: Partial<Record<Slot, number>> = {};
 const missedFired: Partial<Record<Slot, boolean>> = {};
@@ -472,7 +494,7 @@ function checkMissedDoses() {
     const status = state.doses[sl.id];
     if (status === "dispensed") {
       if (!dispensedAt[sl.id]) dispensedAt[sl.id] = now;
-      if (!missedFired[sl.id] && dispensedAt[sl.id] && now - (dispensedAt[sl.id]!) > MISSED_WINDOW_MS) {
+      if (!missedFired[sl.id] && dispensedAt[sl.id] && now - dispensedAt[sl.id]! > MISSED_WINDOW_MS) {
         missedFired[sl.id] = true;
         handleDeviceEvent({ kind: "dose", slot: sl.id, status: "not_removed" });
       }
