@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Cpu, Pill, ChevronRight, Wifi, WifiOff, Bot, Stethoscope, CalendarClock } from "lucide-react";
-import { useStore, setState, connectMqtt, disconnectMqtt } from "@/lib/store";
+import { useStore, setState, connectMqtt, disconnectMqtt, getFirebaseConnectionError } from "@/lib/store";
 import { Card, PageHeader, Field, inputCls, Button, Badge } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/settings")({
@@ -25,7 +25,7 @@ function Settings() {
   const [apiKey, setApiKey] = useState(mqtt.broker);
   const [dbUrl, setDbUrl] = useState(String(mqtt.port));
   const [user, setUser] = useState(mqtt.user);
-  const [pass, setPass] = useState(mqtt.pass);
+  const [pass, setPass] = useState(mqtt.pass);\n  const [connectionError, setConnectionError] = useState("");
 
   useEffect(() => {
     if ("Notification" in window) setPerm(Notification.permission);
@@ -37,7 +37,9 @@ function Settings() {
   const setCk = (k: keyof typeof checkup, v: string) => setState((s) => ({ ...s, checkup: { ...s.checkup, [k]: v } }));
 
   const saveFirebase = () => {
-    connectMqtt(apiKey, dbUrl as unknown as number, user, pass);
+    setConnectionError("");
+    connectMqtt(apiKey, dbUrl, user, pass);
+    window.setTimeout(() => setConnectionError(getFirebaseConnectionError()), 1200);
   };
 
   return (
@@ -130,13 +132,18 @@ function Settings() {
             </Field>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button className="flex-1" onClick={() => connectMqtt(apiKey, dbUrl as any, user, pass)} disabled={!apiKey}>
+            <Button className="flex-1" onClick={() => { connectMqtt(apiKey, dbUrl, user, pass); setConnectionError(""); window.setTimeout(() => setConnectionError(getFirebaseConnectionError()), 1200); }} disabled={!apiKey.trim() || !dbUrl.trim() || !user.trim() || !pass}>
               <Wifi size={15} /> Connect
             </Button>
             {mqtt.connected && (
               <Button variant="outline" onClick={disconnectMqtt}>Disconnect</Button>
             )}
           </div>
+          {(connectionError || getFirebaseConnectionError()) && (
+            <p role="alert" className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600">
+              {connectionError || getFirebaseConnectionError()}
+            </p>
+          )}
           {mqtt.connected && (
             <p className="mt-3 text-xs text-muted-foreground">
               Subscribed to: <span className="font-mono">smartmed/band/vitals</span>, <span className="font-mono">smartmed/box/status</span>, <span className="font-mono">smartmed/box/loadcell</span>
