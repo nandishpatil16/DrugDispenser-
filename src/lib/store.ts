@@ -261,28 +261,23 @@ export function fmtTime(t?: number) {
 }
 
 // ─── MQTT ─────────────────────────────────────────────────────────────────────
-import mqttLib from "mqtt";
-
-let mqttClient: mqttLib.MqttClient | null = null;
-
-// Watchdog: marks device offline if no MQTT message received for 20 seconds
+// --- FIREBASE REALTIME DATABASE -----------------------------------------------
+import { initFirebase, getFbDb } from "./firebaseClient";
+import { ref, onValue, set, onDisconnect } from "firebase/database";
 let boxWatchdog:  ReturnType<typeof setInterval> | null = null;
 let bandWatchdog: ReturnType<typeof setInterval> | null = null;
 let lastBoxMsg  = 0;
 let lastBandMsg = 0;
 const DEVICE_TIMEOUT_MS = 20_000;
-
 function startWatchdogs() {
   if (boxWatchdog)  clearInterval(boxWatchdog);
   if (bandWatchdog) clearInterval(bandWatchdog);
-
   boxWatchdog = setInterval(() => {
     if (lastBoxMsg > 0 && Date.now() - lastBoxMsg > DEVICE_TIMEOUT_MS && state.devices.box.online) {
       setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: false } } }));
       pushAlertThrottled("offline", "Dispenser box went offline");
     }
   }, 5000);
-
   bandWatchdog = setInterval(() => {
     if (lastBandMsg > 0 && Date.now() - lastBandMsg > DEVICE_TIMEOUT_MS && state.devices.band.online) {
       setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: false } } }));
@@ -290,160 +285,61 @@ function startWatchdogs() {
     }
   }, 5000);
 }
-
 function stopWatchdogs() {
   if (boxWatchdog)  { clearInterval(boxWatchdog);  boxWatchdog  = null; }
   if (bandWatchdog) { clearInterval(bandWatchdog); bandWatchdog = null; }
   lastBoxMsg  = 0;
   lastBandMsg = 0;
 }
-
-function parseMqttPayload(topic: string, raw: string) {
-  try {
-    if (topic === "smartmed/band/vitals") {
-      const d = JSON.parse(raw);
-      if (d.fall)      handleDeviceEvent({ kind: "fall" });
-      if (d.emergency) handleDeviceEvent({ kind: "sos" });
-      handleDeviceEvent({ kind: "vitals", hr: d.hr ?? 0, spo2: d.spo2 ?? 0 });
-    } else if (topic === "smartmed/box/status") {
-      const slot = state.box.lastDispenseSlot ?? "morning";
-      if (raw === "DISPENSED") {
-        handleDeviceEvent({ kind: "dose", slot, status: "dispensed" });
-        handleDeviceEvent({ kind: "dfplayer", playing: true });
-      } else if (raw === "TAKEN" || raw === "REMOVED") {
-        handleDeviceEvent({ kind: "dose", slot, status: "removed" });
-        handleDeviceEvent({ kind: "loadcell", grams: 0 });
-        handleDeviceEvent({ kind: "dfplayer", playing: false });
-      } else if (raw === "NOT_TAKEN") {
-        handleDeviceEvent({ kind: "dose", slot, status: "not_removed" });
-      }
-    } else if (topic === "smartmed/box/loadcell") {
-      const g = parseFloat(raw);
-      if (!isNaN(g)) handleDeviceEvent({ kind: "loadcell", grams: g });
-    }
-    // smartmed/box/online and smartmed/band/online are handled
-    // directly in the message handler below via the watchdog
-  } catch {}
-}
-
-function mqttConnect(broker: string, port: number, user: string, pass: string) {
-  if (mqttClient) { mqttClient.end(true); mqttClient = null; }
+let bandListenerUnsub: (() => void) | null = null;
+let boxListenerUnsub: (() => void) | null = null;
+function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: string) {
   stopWatchdogs();
-  if (!broker) return;
-
-  const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(broker);
-  const scheme = isIp ? "ws" : "wss";
-  const url = `${scheme}://${broker}:${port}/mqtt`;
-
-  mqttClient = mqttLib.connect(url, {
-    clientId:        "smartdose-web-" + uid(),
-    username:        user || undefined,
-    password:        pass || undefined,
-    keepalive:       30,
-    reconnectPeriod: 5000,
-    connectTimeout:  10_000,
-  });
-
-  mqttClient.on("connect", () => {
-    // Connected — devices start offline, watchdog will flip online on first message
-    setState((s) => ({
-      ...s,
-      mqtt: { ...s.mqtt, connected: true },
-      devices: {
-        band: { ...s.devices.band, online: false },
-        box:  { ...s.devices.box,  online: false },
-      },
-    }));
-    lastBoxMsg  = 0;
-    lastBandMsg = 0;
-
-    mqttClient?.subscribe([
-      "smartmed/band/vitals",
-      "smartmed/band/online",
-      "smartmed/box/status",
-      "smartmed/box/loadcell",
-      "smartmed/box/online",
-    ]);
-
+  if (!apiKey || !dbUrl) return;
+  initFirebase(apiKey, dbUrl, user, pass).then((db) => {
+    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: true }, devices: { band: { ...s.devices.band, online: false }, box: { ...s.devices.box, online: false } } }));
+    lastBoxMsg = 0; lastBandMsg = 0;
+    if (bandListenerUnsub) bandListenerUnsub();
+    bandListenerUnsub = onValue(ref(db, "devices/band"), (snap) => {
+      const d = snap.val(); if (!d) return;
+      lastBandMsg = Date.now();
+      if (!state.devices.band.online) setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: true, lastSync: Date.now() } } }));
+      if (d.fallDetected) handleDeviceEvent({ kind: "fall" });
+      if (d.sos) handleDeviceEvent({ kind: "sos" });
+      if (d.heartRate != null) handleDeviceEvent({ kind: "vitals", hr: d.heartRate, spo2: 0 });
+    });
+    if (boxListenerUnsub) boxListenerUnsub();
+    boxListenerUnsub = onValue(ref(db, "devices/box"), (snap) => {
+      const d = snap.val(); if (!d) return;
+      lastBoxMsg = Date.now();
+      if (!state.devices.box.online) setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: true, lastSync: Date.now() } } }));
+      const slot = state.box.lastDispenseSlot ?? "morning";
+      if (d.status === "DISPENSED") { handleDeviceEvent({ kind: "dose", slot, status: "dispensed" }); handleDeviceEvent({ kind: "dfplayer", playing: true }); }
+      else if (d.status === "TAKEN" || d.status === "REMOVED") { handleDeviceEvent({ kind: "dose", slot, status: "removed" }); handleDeviceEvent({ kind: "loadcell", grams: 0 }); handleDeviceEvent({ kind: "dfplayer", playing: false }); }
+      else if (d.status === "NOT_TAKEN") { handleDeviceEvent({ kind: "dose", slot, status: "not_removed" }); }
+      if (d.loadCell != null) handleDeviceEvent({ kind: "loadcell", grams: d.loadCell });
+    });
     startWatchdogs();
-    console.log("[MQTT] Connected to", url);
-  });
-
-  mqttClient.on("message", (topic, payload) => {
-    const raw = payload.toString().trim();
-
-    // Box logic
-    if (topic.startsWith("smartmed/box/")) {
-      if (topic === "smartmed/box/online" && raw === "0") {
-        lastBoxMsg = 0; // Disable watchdog, device explicitly told us it died
-        if (state.devices.box.online) {
-          setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: false } } }));
-          pushAlertThrottled("offline", "Dispenser box went offline");
-        }
-      } else {
-        lastBoxMsg = Date.now(); // Proof of life
-        if (!state.devices.box.online) {
-          setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: true, lastSync: Date.now() } } }));
-        }
-      }
-    }
-
-    // Band logic
-    if (topic.startsWith("smartmed/band/")) {
-      if (topic === "smartmed/band/online" && raw === "0") {
-        lastBandMsg = 0; // Disable watchdog, device explicitly told us it died
-        if (state.devices.band.online) {
-          setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: false } } }));
-          pushAlertThrottled("offline", "Monitoring band went offline");
-        }
-      } else {
-        lastBandMsg = Date.now(); // Proof of life
-        if (!state.devices.band.online) {
-          setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: true, lastSync: Date.now() } } }));
-        }
-      }
-    }
-
-    parseMqttPayload(topic, raw);
-  });
-
-  mqttClient.on("close", () => {
-    stopWatchdogs();
-    setState((s) => ({
-      ...s,
-      mqtt: { ...s.mqtt, connected: false },
-      devices: {
-        band: { ...s.devices.band, online: false },
-        box:  { ...s.devices.box,  online: false },
-      },
-    }));
-    console.log("[MQTT] Disconnected");
-  });
-
-  mqttClient.on("error", (err) => {
-    console.error("[MQTT] Error:", err.message);
-  });
+  }).catch(() => setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } })));
 }
-
-export function connectMqtt(broker: string, port: number, user: string, pass: string) {
-  // Save credentials to their own permanent key so they survive any state reset
-  saveCreds(broker, port, user, pass);
-  setState((s) => ({ ...s, mqtt: { ...s.mqtt, broker, port, user, pass } }));
-  mqttConnect(broker, port, user, pass);
+export function connectMqtt(apiKey: string, dummyPort: number, user: string, pass: string) {
+  const dbUrl = String(dummyPort);
+  saveCreds(apiKey, dummyPort, user, pass);
+  setState((s) => ({ ...s, mqtt: { ...s.mqtt, broker: apiKey, port: dummyPort, user, pass } }));
+  firebaseConnect(apiKey, dbUrl, user, pass);
 }
-
 export function disconnectMqtt() {
   stopWatchdogs();
-  mqttClient?.end(true);
-  mqttClient = null;
+  if (bandListenerUnsub) { bandListenerUnsub(); bandListenerUnsub = null; }
+  if (boxListenerUnsub) { boxListenerUnsub(); boxListenerUnsub = null; }
   setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
 }
-
 export function publishMqtt(topic: string, payload: string) {
-  if (mqttClient?.connected) mqttClient.publish(topic, payload);
+  const db = getFbDb();
+  if (!db) return;
+  if (topic === "smartmed/box/command") set(ref(db, "devices/box/command"), payload);
 }
 
-// ─── Auto-Dispense Scheduler ──────────────────────────────────────────────────
 const dispatchedToday = new Set<string>();
 
 export function clearDispatchCache(slot?: Slot) {

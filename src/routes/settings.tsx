@@ -22,8 +22,8 @@ function Settings() {
   const checkup = useStore((s) => s.checkup);
 
   const [perm, setPerm] = useState<string>("default");
-  const [broker, setBroker] = useState(mqtt.broker);
-  const [port, setPort] = useState(String(mqtt.port));
+  const [apiKey, setApiKey] = useState(mqtt.broker);
+  const [dbUrl, setDbUrl] = useState(String(mqtt.port));
   const [user, setUser] = useState(mqtt.user);
   const [pass, setPass] = useState(mqtt.pass);
 
@@ -35,6 +35,10 @@ function Settings() {
   const set = (k: keyof typeof p, v: string) => setState((s) => ({ ...s, patient: { ...s.patient, [k]: v } }));
   const setTg = (k: keyof typeof tg, v: string) => setState((s) => ({ ...s, telegram: { ...s.telegram, [k]: v } }));
   const setCk = (k: keyof typeof checkup, v: string) => setState((s) => ({ ...s, checkup: { ...s.checkup, [k]: v } }));
+
+  const saveFirebase = () => {
+    connectMqtt(apiKey, dbUrl as unknown as number, user, pass);
+  };
 
   return (
     <>
@@ -103,25 +107,25 @@ function Settings() {
         <Card>
           <div className="mb-4 flex items-center gap-2">
             {mqtt.connected ? <Wifi size={17} className="text-primary" /> : <WifiOff size={17} className="text-muted-foreground" />}
-            <h3 className="font-semibold">Hardware connection (MQTT)</h3>
+            <h3 className="font-semibold">Hardware connection (Firebase)</h3>
             <Badge tone={mqtt.connected ? "ok" : "muted"} className="ml-auto">{mqtt.connected ? "Connected" : "Disconnected"}</Badge>
           </div>
           <p className="mb-4 text-xs text-muted-foreground">
-            Enter your EMQX Serverless connection details. Use the WebSocket port (usually 8084 for secure EMQX).
+            <p className="mb-4 text-xs text-muted-foreground">Enter your Firebase Realtime Database connection details.</p>
           </p>
           <div className="grid grid-cols-4 gap-3">
-            <Field label="Broker Address (Host)" className="col-span-3">
-              <input className={inputCls} placeholder="e.g. abc1234.ala.us-east-1.emqxsl.com" value={broker} onChange={(e) => setBroker(e.target.value)} />
+              <Field label="Web API Key" className="col-span-3">
+                <input className={inputCls} placeholder="AIzaSy..." value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
             </Field>
-            <Field label="WS Port">
-              <input type="number" className={inputCls} value={port} onChange={(e) => setPort(e.target.value)} />
+              <Field label="Database URL">
+                <input className={inputCls} placeholder="https://..." value={dbUrl} onChange={(e) => setDbUrl(e.target.value)} />
             </Field>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <Field label="Username">
+            <Field label="Auth Email">
               <input className={inputCls} placeholder="e.g. smartdose" value={user} onChange={(e) => setUser(e.target.value)} />
             </Field>
-            <Field label="Password">
+            <Field label="Auth Password">
               <input type="password" className={inputCls} placeholder="e.g. secret123" value={pass} onChange={(e) => setPass(e.target.value)} />
             </Field>
           </div>
