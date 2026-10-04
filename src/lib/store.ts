@@ -64,7 +64,7 @@ const initial: State = {
 // STATE_KEY can be bumped to wipe other state (alerts, readings) without
 // deleting the user's broker address / password.
 const CREDS_KEY = "smartdose-creds-v2";   // ← never change this key
-const STATE_KEY = "smartdose-state-v5";   // ← bump this if you need to reset
+const STATE_KEY = "smartdose-state-v6";   // ← bump this if you need to reset
 
 let state: State = initial;
 let loaded = false;
