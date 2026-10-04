@@ -25,7 +25,7 @@ function Settings() {
   const [apiKey, setApiKey] = useState(mqtt.broker);
   const [dbUrl, setDbUrl] = useState(String(mqtt.port));
   const [user, setUser] = useState(mqtt.user);
-  const [pass, setPass] = useState(mqtt.pass);\n  const [connectionError, setConnectionError] = useState("");
+  const [pass, setPass] = useState(mqtt.pass);
 
   useEffect(() => {
     if ("Notification" in window) setPerm(Notification.permission);

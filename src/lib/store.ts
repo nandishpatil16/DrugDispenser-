@@ -264,7 +264,7 @@ export function fmtTime(t?: number) {
 // --- FIREBASE REALTIME DATABASE -----------------------------------------------
 import { initFirebase, getFbDb } from "./firebaseClient";
 import { ref, onValue, set, onDisconnect } from "firebase/database";
-let setState(s => ({ ...s, firebaseError: "", isConnecting: true }));\nexport function getFirebaseConnectionError() { return firebaseConnectionError; }\nlet boxWatchdog:  ReturnType<typeof setInterval> | null = null;
+let boxWatchdog:  ReturnType<typeof setInterval> | null = null;
 let bandWatchdog: ReturnType<typeof setInterval> | null = null;
 let lastBoxMsg  = 0;
 let lastBandMsg = 0;
