@@ -153,8 +153,12 @@ export function slotTotalMg(s: State, slot: Slot) {
 function pushAlert(type: AlertType, message: string, emergency = false) {
   const a: Alert = { id: uid(), type, message, at: Date.now(), ack: false };
   setState((s) => ({ ...s, alerts: [a, ...s.alerts].slice(0, 200) }));
-  if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-    new Notification(emergency ? "🚨 " + message : message, { body: new Date().toLocaleTimeString() });
+  try {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      new Notification(emergency ? "🚨 " + message : message, { body: new Date().toLocaleTimeString() });
+    }
+  } catch (err) {
+    console.warn("Notification API failed:", err);
   }
   if (emergency) beep();
 }
