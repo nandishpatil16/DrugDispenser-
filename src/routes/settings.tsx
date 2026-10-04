@@ -130,7 +130,7 @@ function Settings() {
             </Field>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button className="flex-1" onClick={() => connectMqtt(broker, Number(port), user, pass)} disabled={!broker}>
+            <Button className="flex-1" onClick={() => connectMqtt(apiKey, dbUrl as any, user, pass)} disabled={!apiKey}>
               <Wifi size={15} /> Connect
             </Button>
             {mqtt.connected && (
