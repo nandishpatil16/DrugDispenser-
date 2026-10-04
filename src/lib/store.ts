@@ -64,7 +64,7 @@ const initial: State = {
 // STATE_KEY can be bumped to wipe other state (alerts, readings) without
 // deleting the user's broker address / password.
 const CREDS_KEY = "smartdose-creds-v1";   // ← never change this key
-const STATE_KEY = "smartdose-state-v3";   // ← bump this if you need to reset
+const STATE_KEY = "smartdose-state-v4";   // ← bump this if you need to reset
 
 let state: State = initial;
 let loaded = false;
@@ -210,11 +210,11 @@ export function handleDeviceEvent(e: DeviceEvent) {
       break;
     }
     case "fall":
-      setState((s) => ({ ...s, falls: [now, ...s.falls] }));
-      pushAlert("fall", "Fall detected by band", true);
+      setState((s) => ({ ...s, falls: [now, ...s.falls].slice(0, 50) })); // Keep only last 50 falls to prevent memory leaks
+      pushAlertThrottled("fall", "Fall detected by band", true);
       break;
     case "sos":
-      pushAlert("sos", "SOS button pressed by patient", true);
+      pushAlertThrottled("sos", "SOS button pressed by patient", true);
       break;
     case "dose":
       setState((s) => ({ ...s, doses: { ...s.doses, [e.slot]: e.status } }));
