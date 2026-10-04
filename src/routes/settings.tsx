@@ -132,7 +132,7 @@ function Settings() {
             </Field>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button className="flex-1" onClick={() => { connectMqtt(apiKey, dbUrl, user, pass); setConnectionError(""); window.setTimeout(() => setConnectionError(getFirebaseConnectionError()), 1200); }} disabled={!apiKey.trim() || !dbUrl.trim() || !user.trim() || !pass}>
+            <Button className="flex-1" onClick={() => { setConnectionError(""); connectMqtt(apiKey, dbUrl, user, pass); let t=0; const i=setInterval(()=>{ const e=getFirebaseConnectionError(); if(e){ setConnectionError(e); clearInterval(i); } if(++t>20) clearInterval(i); }, 250); }} disabled={!apiKey.trim() || !dbUrl.trim() || !user.trim() || !pass}>
               <Wifi size={15} /> Connect
             </Button>
             {mqtt.connected && (

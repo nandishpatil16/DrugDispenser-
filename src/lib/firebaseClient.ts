@@ -8,14 +8,10 @@ let db;
 
 export async function initFirebase(apiKey: string, databaseURL: string, email: string, pass: string) {
   try {
-    if (getApps().length > 0) {
-      await deleteApp(getApps()[0]);
-    }
-    
     app = initializeApp({
       apiKey,
       databaseURL,
-    });
+    }, "SmartDose_" + Date.now());
     
     auth = getAuth(app);
     db = getDatabase(app);

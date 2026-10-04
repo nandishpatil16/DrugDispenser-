@@ -33,7 +33,7 @@ export type State = {
   telegram: { botToken: string; chatId: string };
   checkup: { nextDate: string; doctor: string; notes: string };
   box: { loadCellGrams: number; dfplaying: boolean; lastDispenseSlot: Slot | null };
-  theme: "light" | "dark" | "system";
+  theme: "light" | "dark" | "system"; firebaseError?: string;
 };
 
 const initial: State = {
