@@ -368,25 +368,35 @@ function mqttConnect(broker: string, port: number, user: string, pass: string) {
   mqttClient.on("message", (topic, payload) => {
     const raw = payload.toString().trim();
 
-    // Any message on a box topic → box is alive
+    // Box logic
     if (topic.startsWith("smartmed/box/")) {
-      lastBoxMsg = Date.now();
-      if (!state.devices.box.online) {
-        setState((s) => ({
-          ...s,
-          devices: { ...s.devices, box: { ...s.devices.box, online: true, lastSync: Date.now() } },
-        }));
+      if (topic === "smartmed/box/online" && raw === "0") {
+        lastBoxMsg = 0; // Disable watchdog, device explicitly told us it died
+        if (state.devices.box.online) {
+          setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: false } } }));
+          pushAlertThrottled("offline", "Dispenser box went offline");
+        }
+      } else {
+        lastBoxMsg = Date.now(); // Proof of life
+        if (!state.devices.box.online) {
+          setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: true, lastSync: Date.now() } } }));
+        }
       }
     }
 
-    // Any message on a band topic → band is alive
+    // Band logic
     if (topic.startsWith("smartmed/band/")) {
-      lastBandMsg = Date.now();
-      if (!state.devices.band.online) {
-        setState((s) => ({
-          ...s,
-          devices: { ...s.devices, band: { ...s.devices.band, online: true, lastSync: Date.now() } },
-        }));
+      if (topic === "smartmed/band/online" && raw === "0") {
+        lastBandMsg = 0; // Disable watchdog, device explicitly told us it died
+        if (state.devices.band.online) {
+          setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: false } } }));
+          pushAlertThrottled("offline", "Monitoring band went offline");
+        }
+      } else {
+        lastBandMsg = Date.now(); // Proof of life
+        if (!state.devices.band.online) {
+          setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: true, lastSync: Date.now() } } }));
+        }
       }
     }
 
