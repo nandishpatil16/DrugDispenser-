@@ -334,17 +334,14 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
     });
     startWatchdogs();
   }).catch((err) => {
-    const code = String(err?.code || "");
-    firebaseConnectionError =
-      code.includes("auth/invalid-credential") || code.includes("auth/wrong-password") || code.includes("auth/user-not-found")
-        ? "Login failed. Check the Firebase Authentication email and password, and confirm Email/Password sign-in is enabled."
-        : code.includes("auth/unauthorized-domain")
-        ? "This localhost domain is not authorized. Add localhost under Firebase Authentication → Settings → Authorized domains."
-        : code.includes("network")
-        ? "Network request failed. Check internet access, the database URL, and browser extensions."
-        : `${code || "Firebase connection failed"}: ${err?.message || "Check Firebase project settings."}`;
-    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
-  });
+  const code = String(err?.code || '');
+  let errMsg = 'Connection failed';
+  if (code.includes('auth/invalid') || code.includes('auth/wrong') || code.includes('auth/user-not')) errMsg = 'Login failed. Check Email and Password.';
+  else if (code.includes('auth/unauthorized')) errMsg = 'Domain not authorized in Firebase Console.';
+  else if (code.includes('network')) errMsg = 'Network request failed.';
+  else errMsg = `${code}: ${err?.message || 'Check Firebase settings'}`;
+  setState((s) => ({ ...s, isConnecting: false, firebaseError: errMsg, mqtt: { ...s.mqtt, connected: false } }));
+});
 }
 export function connectMqtt(apiKey: string, databaseURL: string, user: string, pass: string) {
   const dbUrl = String(databaseURL || "").trim();
