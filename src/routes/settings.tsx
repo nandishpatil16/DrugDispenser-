@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Cpu, Pill, ChevronRight, Wifi, WifiOff, Bot, Stethoscope, CalendarClock } from "lucide-react";
-import { useStore, setState, connectMqtt, disconnectMqtt, getFirebaseConnectionError } from "@/lib/store";
+import { useStore, setState, connectMqtt, disconnectMqtt } from "@/lib/store";
 import { Card, PageHeader, Field, inputCls, Button, Badge } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/settings")({
@@ -132,16 +132,16 @@ function Settings() {
             </Field>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button className="flex-1" onClick={() => { setConnectionError(""); connectMqtt(apiKey, dbUrl, user, pass); let t=0; const i=setInterval(()=>{ const e=getFirebaseConnectionError(); if(e){ setConnectionError(e); clearInterval(i); } if(++t>20) clearInterval(i); }, 250); }} disabled={!apiKey.trim() || !dbUrl.trim() || !user.trim() || !pass}>
-              <Wifi size={15} /> Connect
+            <Button className="flex-1" onClick={() => connectMqtt(apiKey, dbUrl, user, pass)} disabled={!apiKey.trim() || !dbUrl.trim() || !user.trim() || !pass}>
+              {useStore(s => s.isConnecting) ? "Connecting..." : <><Wifi size={15} /> Connect</>}
             </Button>
             {mqtt.connected && (
               <Button variant="outline" onClick={disconnectMqtt}>Disconnect</Button>
             )}
           </div>
-          {(connectionError || getFirebaseConnectionError()) && (
+          {useStore(s => s.firebaseError) && (
             <p role="alert" className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600">
-              {connectionError || getFirebaseConnectionError()}
+              {useStore(s => s.firebaseError)}
             </p>
           )}
           {mqtt.connected && (
@@ -203,3 +203,4 @@ function Settings() {
     </>
   );
 }
+

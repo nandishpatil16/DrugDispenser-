@@ -33,7 +33,7 @@ export type State = {
   telegram: { botToken: string; chatId: string };
   checkup: { nextDate: string; doctor: string; notes: string };
   box: { loadCellGrams: number; dfplaying: boolean; lastDispenseSlot: Slot | null };
-  theme: "light" | "dark" | "system"; firebaseError?: string;
+  theme: "light" | "dark" | "system"; isConnecting?: boolean; firebaseError?: string; firebaseError?: string;
 };
 
 const initial: State = {
@@ -264,7 +264,7 @@ export function fmtTime(t?: number) {
 // --- FIREBASE REALTIME DATABASE -----------------------------------------------
 import { initFirebase, getFbDb } from "./firebaseClient";
 import { ref, onValue, set, onDisconnect } from "firebase/database";
-let firebaseConnectionError = "";\nexport function getFirebaseConnectionError() { return firebaseConnectionError; }\nlet boxWatchdog:  ReturnType<typeof setInterval> | null = null;
+let setState(s => ({ ...s, firebaseError: "", isConnecting: true }));\nexport function getFirebaseConnectionError() { return firebaseConnectionError; }\nlet boxWatchdog:  ReturnType<typeof setInterval> | null = null;
 let bandWatchdog: ReturnType<typeof setInterval> | null = null;
 let lastBoxMsg  = 0;
 let lastBandMsg = 0;
@@ -295,22 +295,20 @@ let bandListenerUnsub: (() => void) | null = null;
 let boxListenerUnsub: (() => void) | null = null;
 function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: string) {
   stopWatchdogs();
-  firebaseConnectionError = "";
+  setState(s => ({ ...s, firebaseError: "", isConnecting: true }));
   if (bandListenerUnsub) { bandListenerUnsub(); bandListenerUnsub = null; }
   if (boxListenerUnsub) { boxListenerUnsub(); boxListenerUnsub = null; }
   if (!apiKey.trim() || !dbUrl.trim() || !user.trim() || !pass) {
-    firebaseConnectionError = "Fill in the Web API key, database URL, auth email, and password.";
-    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
+    setState(s => ({ ...s, firebaseError: "Fill in the Web API key, database URL, auth email, and password.", isConnecting: false, mqtt: { ...s.mqtt, connected: false } }));
     return;
   }
   if (!/^https:\/\/.+\.firebaseio\.com\/?$|^https:\/\/.+\.(?:firebasedatabase\.app|firebasedatabase\.asia)\/?$/i.test(dbUrl.trim())) {
-    firebaseConnectionError = "Database URL does not look like a Firebase Realtime Database URL. Copy it from Firebase Console → Realtime Database.";
-    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
+    setState(s => ({ ...s, firebaseError: "Database URL does not look like a Firebase Realtime Database URL. Copy it from Firebase Console → Realtime Database.", isConnecting: false, mqtt: { ...s.mqtt, connected: false } }));
     return;
   }
   initFirebase(apiKey.trim(), dbUrl.trim().replace(/\/$/, ""), user.trim(), pass).then((db) => {
-    firebaseConnectionError = "";
-    setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: true }, devices: { band: { ...s.devices.band, online: false }, box: { ...s.devices.box, online: false } } }));
+    setState(s => ({ ...s, firebaseError: "", isConnecting: true }));
+    setState((s) => ({ ...s, isConnecting: false, firebaseError: "", mqtt: { ...s.mqtt, connected: true }, devices: { band: { ...s.devices.band, online: false }, box: { ...s.devices.box, online: false } } }));
     lastBoxMsg = 0; lastBandMsg = 0;
     bandListenerUnsub = onValue(ref(db, "devices/band"), (snap) => {
       const d = snap.val(); if (!d) return;
@@ -320,8 +318,7 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
       if (d.sos) handleDeviceEvent({ kind: "sos" });
       if (d.heartRate != null) handleDeviceEvent({ kind: "vitals", hr: d.heartRate, spo2: 0 });
     }, (err) => {
-      firebaseConnectionError = `Firebase cannot read devices/band: ${err.message}`;
-      setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
+      setState(s => ({ ...s, firebaseError: `Firebase cannot read devices/band: ${err.message}`, isConnecting: false, mqtt: { ...s.mqtt, connected: false } }));
     });
     boxListenerUnsub = onValue(ref(db, "devices/box"), (snap) => {
       const d = snap.val(); if (!d) return;
@@ -333,8 +330,7 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
       else if (d.status === "NOT_TAKEN") { handleDeviceEvent({ kind: "dose", slot, status: "not_removed" }); }
       if (d.loadCell != null) handleDeviceEvent({ kind: "loadcell", grams: d.loadCell });
     }, (err) => {
-      firebaseConnectionError = `Firebase cannot read devices/box: ${err.message}`;
-      setState((s) => ({ ...s, mqtt: { ...s.mqtt, connected: false } }));
+      setState(s => ({ ...s, firebaseError: `Firebase cannot read devices/box: ${err.message}`, isConnecting: false, mqtt: { ...s.mqtt, connected: false } }));
     });
     startWatchdogs();
   }).catch((err) => {
@@ -352,7 +348,7 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
 }
 export function connectMqtt(apiKey: string, databaseURL: string, user: string, pass: string) {
   const dbUrl = String(databaseURL || "").trim();
-  firebaseConnectionError = "";
+  setState(s => ({ ...s, firebaseError: "", isConnecting: true }));
   saveCreds(apiKey, dbUrl as unknown as number, user, pass);
   setState((s) => ({ ...s, mqtt: { ...s.mqtt, broker: apiKey, port: dbUrl, user, pass, connected: false } }));
   firebaseConnect(apiKey, dbUrl, user, pass);
@@ -448,3 +444,4 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
