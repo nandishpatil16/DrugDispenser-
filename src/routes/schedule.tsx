@@ -160,7 +160,7 @@ function SlotCard({ slot }: { slot: typeof SLOTS[number] }) {
         {/* Manual dispense override */}
         <Button
           className="mt-4 w-full gap-2"
-          variant={mqttConnected ? "default" : "outline"}
+          variant={mqttConnected ? "primary" : "outline"}
           disabled={!mqttConnected || !p.enabled || p.items.length === 0}
           onClick={handleManualDispense}
           title={!mqttConnected ? "Connect to MQTT broker in Settings first" : ""}
@@ -250,3 +250,4 @@ function Schedule() {
     </>
   );
 }
+
