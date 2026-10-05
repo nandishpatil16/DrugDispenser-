@@ -22,7 +22,6 @@ export type State = {
   patient: { name: string; age: string; doctor: string; doctorPhone: string; patientPhone: string };
   alerts: Alert[];
   readings: Reading[];
-  falls: number[];
   devices: {
     band: { online: boolean; battery?: number; lastSync?: number };
     box:  { online: boolean; tray?: string; lastSync?: number };
@@ -48,7 +47,6 @@ const initial: State = {
   patient:   { name: "", age: "", doctor: "", doctorPhone: "", patientPhone: "" },
   alerts:    [],
   readings:  [],
-  falls:     [],
   devices:   { band: { online: false }, box: { online: false } },
   doses:     {},
   emergency: null,
@@ -184,7 +182,7 @@ function pushAlertThrottled(type: AlertType, message: string, emergency = false)
 // ─── Device events ─────────────────────────────────────────────────────────────
 export type DeviceEvent =
   | { kind: "vitals"; hr?: number; spo2?: number; battery?: number }
-  | { kind: "fall" }
+  
   | { kind: "sos" }
   | { kind: "dose"; slot: Slot; status: DoseStatus }
   | { kind: "box"; online: boolean; tray?: string }
@@ -213,10 +211,6 @@ export function handleDeviceEvent(e: DeviceEvent) {
         pushAlertThrottled("spo2", `Low blood oxygen: ${spo2}%`, true);
       break;
     }
-    case "fall":
-      setState((s) => ({ ...s, falls: [now, ...s.falls].slice(0, 50) })); // Keep only last 50 falls to prevent memory leaks
-      pushAlertThrottled("fall", "Fall detected by band", true);
-      break;
     case "sos":
       pushAlertThrottled("sos", "SOS button pressed by patient", true);
       break;
@@ -245,8 +239,6 @@ export type Advice = { level: "routine" | "soon" | "immediate"; text: string };
 export function checkupAdvice(s: State): Advice | null {
   const week = Date.now() - 7 * 864e5;
   const recent = s.readings.filter((r) => r.at > week);
-  if (s.falls.some((f) => f > week))
-    return { level: "immediate", text: "A fall was detected this week. Arrange a medical examination as soon as possible." };
   const abnHr = recent.filter((r) => r.hr != null && (r.hr! < s.limits.hrMin || r.hr! > s.limits.hrMax)).length;
   const lowO2 = recent.filter((r) => r.spo2 != null && r.spo2! < s.limits.spo2Min).length;
   if (abnHr >= 5 || lowO2 >= 3)
@@ -320,7 +312,6 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
           setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: isOnline, lastSync: Date.now() } } }));
           if (!isOnline) pushAlertThrottled("offline", "Monitoring band went offline");
         }
-        if (d.fallDetected && Date.now() - (window as any)._lastFall > 15000) { (window as any)._lastFall = Date.now(); handleDeviceEvent({ kind: "fall" }); }
           if (d.sos && Date.now() - (window as any)._lastSos > 15000) { (window as any)._lastSos = Date.now(); handleDeviceEvent({ kind: "sos" }); }
         if (d.heartRate != null) handleDeviceEvent({ kind: "vitals", hr: d.heartRate, spo2: 0 });
       }, (err) => {
@@ -456,6 +447,8 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
+
 
 
 

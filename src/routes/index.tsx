@@ -25,7 +25,7 @@ function Dashboard() {
   const s = useStore((x) => x);
   const last = s.readings[s.readings.length - 1];
   const unread = s.alerts.filter((a) => !a.ack);
-  const lastFall = s.falls[0];
+  
   const checkup = s.checkup;
 
   return (
@@ -56,11 +56,7 @@ function Dashboard() {
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Vital icon={<Heart size={18} />} label="Heart rate" value={last?.hr} unit="bpm" />
         <Vital icon={<Droplets size={18} />} label="SpO₂" value={last?.spo2} unit="%" />
-        <Card>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><PersonStanding size={18} /> Fall detection</div>
-          <p className="mt-3 text-lg font-semibold">{lastFall ? "Fall recorded" : s.devices.band.online ? "No falls" : "—"}</p>
-          <p className="text-xs text-muted-foreground">Last: {fmtTime(lastFall)}</p>
-        </Card>
+        
         <Card>
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><RefreshCw size={18} /> Last sync</div>
           <p className="mt-3 text-lg font-semibold">{fmtTime(last?.at)}</p>
@@ -186,3 +182,4 @@ function Vital({ icon, label, value, unit }: { icon: React.ReactNode; label: str
     </Card>
   );
 }
+

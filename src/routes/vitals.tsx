@@ -115,22 +115,9 @@ function Vitals() {
           </div>
         </Card>
 
-        {/* Fall history */}
-        <Card>
-          <h3 className="mb-3 font-semibold">Fall history</h3>
-          {s.falls.length === 0
-            ? <Empty icon={<PersonStanding />} title="No falls recorded" text="Falls detected by the gyro sensor on the band appear here." />
-            : <ul className="divide-y text-sm">{s.falls.map((f) => (
-                <li key={f} className="flex items-center gap-3 py-2">
-                  <AlertTriangle size={14} className="text-destructive" />
-                  <span>{fmtTime(f)}</span>
-                </li>
-              ))}</ul>
-          }
-        </Card>
-
         <AdviceCard />
       </div>
     </>
   );
 }
+
