@@ -268,7 +268,7 @@ let boxWatchdog:  ReturnType<typeof setInterval> | null = null;
 let bandWatchdog: ReturnType<typeof setInterval> | null = null;
 let lastBoxMsg  = 0;
 let lastBandMsg = 0;
-const DEVICE_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
+const DEVICE_TIMEOUT_MS = 20_000;
 function startWatchdogs() {
   if (boxWatchdog)  clearInterval(boxWatchdog);
   if (bandWatchdog) clearInterval(bandWatchdog);
@@ -449,5 +449,6 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
 
 
