@@ -20,6 +20,9 @@ function Settings() {
   const mqtt = useStore((s) => s.mqtt);
   const tg = useStore((s) => s.telegram);
   const checkup = useStore((s) => s.checkup);
+  const theme = useStore(s => s.theme);
+  const isConnecting = useStore(s => s.isConnecting);
+  const firebaseError = useStore(s => s.firebaseError);
 
   const [perm, setPerm] = useState<string>("default");
   const [apiKey, setApiKey] = useState(mqtt.broker);
@@ -64,7 +67,7 @@ function Settings() {
                   type="radio" 
                   name="theme" 
                   value={t} 
-                  checked={useStore(s => s.theme) === t} 
+                  checked={theme === t} 
                   onChange={() => setState(s => ({ ...s, theme: t }))} 
                   className="h-4 w-4 text-primary accent-primary" 
                 />
@@ -133,15 +136,15 @@ function Settings() {
           </div>
           <div className="mt-4 flex gap-2">
             <Button className="flex-1" onClick={() => connectMqtt(apiKey, dbUrl, user, pass)} disabled={!apiKey.trim() || !dbUrl.trim() || !user.trim() || !pass}>
-              {useStore(s => s.isConnecting) ? "Connecting..." : <><Wifi size={15} /> Connect</>}
+              {isConnecting ? "Connecting..." : <><Wifi size={15} /> Connect</>}
             </Button>
             {mqtt.connected && (
               <Button variant="outline" onClick={disconnectMqtt}>Disconnect</Button>
             )}
           </div>
-          {useStore(s => s.firebaseError) && (
+          {firebaseError && (
             <p role="alert" className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600">
-              {useStore(s => s.firebaseError)}
+              {firebaseError}
             </p>
           )}
           {mqtt.connected && (
@@ -203,4 +206,6 @@ function Settings() {
     </>
   );
 }
+
+
 
