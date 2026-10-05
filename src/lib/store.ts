@@ -9,7 +9,7 @@ export const SLOTS: { id: Slot; label: string }[] = [
 
 export type Medicine = { id: string; name: string; mg: number; compartment: string; stock: number; notes: string };
 export type SlotPlan = { time: string; enabled: boolean; items: { medId: string; qty: number }[] };
-export type AlertType = "sos" | "fall" | "heart" | "spo2" | "dose" | "offline";
+export type AlertType = "sos" | "heart" | "spo2" | "dose" | "offline";
 export type Alert = { id: string; type: AlertType; message: string; at: number; ack: boolean };
 export type Reading = { at: number; hr?: number; spo2?: number };
 export type DoseStatus = "scheduled" | "dispensed" | "removed" | "not_removed";
@@ -260,6 +260,8 @@ let boxWatchdog:  ReturnType<typeof setInterval> | null = null;
 let bandWatchdog: ReturnType<typeof setInterval> | null = null;
 let lastBoxMsg  = 0;
 let lastBandMsg = 0;
+let lastProcessedHR: number | null = null;
+let lastVitalsProcess = 0;
 (window as any)._lastFall = 0;
 (window as any)._lastSos = 0;
 const DEVICE_TIMEOUT_MS = 60_000;
@@ -303,7 +305,7 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
   initFirebase(apiKey.trim(), dbUrl.trim().replace(/\/$/, ""), user.trim(), pass).then((db) => {
     setState(s => ({ ...s, firebaseError: "", isConnecting: true }));
     setState((s) => ({ ...s, isConnecting: false, firebaseError: "", mqtt: { ...s.mqtt, connected: true }, devices: { band: { ...s.devices.band, online: false }, box: { ...s.devices.box, online: false } } }));
-    lastBoxMsg = 0; lastBandMsg = 0;
+    lastBoxMsg = 0; lastBandMsg = 0; lastProcessedHR = null; lastVitalsProcess = 0;
     bandListenerUnsub = onValue(ref(db, "devices/band"), (snap) => {
         const d = snap.val(); if (!d) return;
         lastBandMsg = Date.now();
@@ -313,7 +315,12 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
           if (!isOnline) pushAlertThrottled("offline", "Monitoring band went offline");
         }
           if (d.sos && Date.now() - (window as any)._lastSos > 15000) { (window as any)._lastSos = Date.now(); handleDeviceEvent({ kind: "sos" }); }
-        if (d.heartRate != null) handleDeviceEvent({ kind: "vitals", hr: d.heartRate, spo2: 0 });
+        const hr = Number(d.heartRate);
+        if (Number.isFinite(hr) && hr > 0 && (hr !== lastProcessedHR || Date.now() - lastVitalsProcess >= 5000)) {
+          lastProcessedHR = hr;
+          lastVitalsProcess = Date.now();
+          handleDeviceEvent({ kind: "vitals", hr: hr, spo2: Number(d.spo2) || 0, battery: Number(d.battery) || undefined });
+        }
       }, (err) => {
         setState(s => ({ ...s, firebaseError: `Firebase cannot read devices/band: ${err.message}`, isConnecting: false, mqtt: { ...s.mqtt, connected: false } }));
       });
@@ -447,6 +454,7 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
 
 
 
