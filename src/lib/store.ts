@@ -268,6 +268,8 @@ let boxWatchdog:  ReturnType<typeof setInterval> | null = null;
 let bandWatchdog: ReturnType<typeof setInterval> | null = null;
 let lastBoxMsg  = 0;
 let lastBandMsg = 0;
+(window as any)._lastFall = 0;
+(window as any)._lastSos = 0;
 const DEVICE_TIMEOUT_MS = 60_000;
 function startWatchdogs() {
   if (boxWatchdog)  clearInterval(boxWatchdog);
@@ -318,8 +320,8 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
           setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: isOnline, lastSync: Date.now() } } }));
           if (!isOnline) pushAlertThrottled("offline", "Monitoring band went offline");
         }
-        if (d.fallDetected) handleDeviceEvent({ kind: "fall" });
-        if (d.sos) handleDeviceEvent({ kind: "sos" });
+        if (d.fallDetected && Date.now() - (window as any)._lastFall > 15000) { (window as any)._lastFall = Date.now(); handleDeviceEvent({ kind: "fall" }); }
+          if (d.sos && Date.now() - (window as any)._lastSos > 15000) { (window as any)._lastSos = Date.now(); handleDeviceEvent({ kind: "sos" }); }
         if (d.heartRate != null) handleDeviceEvent({ kind: "vitals", hr: d.heartRate, spo2: 0 });
       }, (err) => {
         setState(s => ({ ...s, firebaseError: `Firebase cannot read devices/band: ${err.message}`, isConnecting: false, mqtt: { ...s.mqtt, connected: false } }));
@@ -454,6 +456,7 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
 
 
 
