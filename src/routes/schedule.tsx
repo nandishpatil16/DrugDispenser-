@@ -49,7 +49,7 @@ function SlotCard({ slot }: { slot: typeof SLOTS[number] }) {
   const meta = SLOT_META[slot.id];
   const countdown = useCountdown(p.time, p.enabled);
   const mqttConnected = s.mqtt.connected;
-  const doseStatus = s.doses[slot.id];
+  
 
   const upd = (fn: (p: typeof p) => typeof p) =>
     setState((st) => ({ ...st, schedule: { ...st.schedule, [slot.id]: fn(st.schedule[slot.id]) } }));
@@ -103,11 +103,7 @@ function SlotCard({ slot }: { slot: typeof SLOTS[number] }) {
             <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Next dispense in</p>
             <p className="font-mono text-lg font-bold text-foreground">{p.enabled ? countdown : "—"}</p>
           </div>
-          {doseStatus && (
-            <Badge tone={doseStatus === "removed" ? "ok" : doseStatus === "not_removed" ? "danger" : "primary"}>
-              {doseStatus === "removed" ? "Taken ✓" : doseStatus === "dispensed" ? "In tray" : doseStatus === "not_removed" ? "Missed" : ""}
-            </Badge>
-          )}
+          
         </div>
 
         {/* Medicine items */}
@@ -250,4 +246,5 @@ function Schedule() {
     </>
   );
 }
+
 

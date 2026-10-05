@@ -333,7 +333,7 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
           if (!isOnline) pushAlertThrottled("offline", "Dispenser box went offline");
         }
         const slot = state.box.lastDispenseSlot ?? "morning";
-        if (d.status === "DISPENSED") { handleDeviceEvent({ kind: "dose", slot, status: "dispensed" }); handleDeviceEvent({ kind: "dfplayer", playing: true }); }
+        if (d.status === "DISPENSED") {  handleDeviceEvent({ kind: "dfplayer", playing: true }); }
         else if (d.status === "TAKEN" || d.status === "REMOVED") { handleDeviceEvent({ kind: "dose", slot, status: "removed" }); handleDeviceEvent({ kind: "loadcell", grams: 0 }); handleDeviceEvent({ kind: "dfplayer", playing: false }); }
         else if (d.status === "NOT_TAKEN") { handleDeviceEvent({ kind: "dose", slot, status: "not_removed" }); }
         if (d.loadCell != null) handleDeviceEvent({ kind: "loadcell", grams: d.loadCell });
@@ -389,7 +389,7 @@ export function manualDispense(slot: Slot) {
   dispatchedToday.add(`${todayKey}-${slot}`);
   setState((s) => ({ ...s, box: { ...s.box, lastDispenseSlot: slot } }));
   publishMqtt("smartmed/box/command", `DISPENSE_${slot.toUpperCase()}`);
-  handleDeviceEvent({ kind: "dose", slot, status: "dispensed" });
+  
   handleDeviceEvent({ kind: "dfplayer", playing: true });
 }
 
@@ -417,7 +417,7 @@ function checkDispenseSchedule() {
     dispatchedToday.add(fireKey);
     setState((s) => ({ ...s, box: { ...s.box, lastDispenseSlot: sl.id } }));
     publishMqtt("smartmed/box/command", `DISPENSE_${sl.id.toUpperCase()}`);
-    handleDeviceEvent({ kind: "dose", slot: sl.id, status: "dispensed" });
+    
     handleDeviceEvent({ kind: "dfplayer", playing: true });
   });
 }
@@ -449,6 +449,7 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
 
 
 
