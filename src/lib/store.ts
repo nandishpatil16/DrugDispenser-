@@ -119,7 +119,7 @@ function load() {
     // Auto-connect MQTT if broker is saved
     if (state.mqtt.broker) {
       setTimeout(() => {
-        mqttConnect(state.mqtt.broker, state.mqtt.port, state.mqtt.user, state.mqtt.pass);
+        connectMqtt(String(state.mqtt.broker), String(state.mqtt.port), state.mqtt.user, state.mqtt.pass);
       }, 300);
     }
   } catch {}
@@ -268,7 +268,7 @@ let boxWatchdog:  ReturnType<typeof setInterval> | null = null;
 let bandWatchdog: ReturnType<typeof setInterval> | null = null;
 let lastBoxMsg  = 0;
 let lastBandMsg = 0;
-const DEVICE_TIMEOUT_MS = 20_000;
+const DEVICE_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 function startWatchdogs() {
   if (boxWatchdog)  clearInterval(boxWatchdog);
   if (bandWatchdog) clearInterval(bandWatchdog);
@@ -441,4 +441,5 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
 
