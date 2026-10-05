@@ -3,8 +3,9 @@ import { useStore, checkupAdvice } from "@/lib/store";
 import { Card, Badge } from "./ui-kit";
 
 export function AdviceCard() {
-  const advice = useStore((s) => checkupAdvice(s));
-  const doctor = useStore((s) => s.patient);
+  const s = useStore((s) => s);
+  const advice = checkupAdvice(s);
+  const doctor = s.patient;
   return (
     <Card>
       <div className="flex items-center gap-2"><Stethoscope size={18} className="text-primary" /><h3 className="font-semibold">Checkup advice</h3></div>
@@ -20,3 +21,4 @@ export function AdviceCard() {
     </Card>
   );
 }
+
