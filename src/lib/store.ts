@@ -386,7 +386,7 @@ export function clearDispatchCache(slot?: Slot) {
 export function manualDispense(slot: Slot) {
   if (!state.mqtt.connected) return;
   const todayKey = new Date().toISOString().slice(0, 10);
-  dispatchedToday.add(`${todayKey}-${slot}`);
+  
   setState((s) => ({ ...s, box: { ...s.box, lastDispenseSlot: slot } }));
   publishMqtt("smartmed/box/command", `DISPENSE_${slot.toUpperCase()}`);
   
@@ -449,6 +449,7 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
 
 
 
