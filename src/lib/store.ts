@@ -423,24 +423,29 @@ function checkDispenseSchedule() {
 }
 
 // ─── Missed-Dose Watchdog ─────────────────────────────────────────────────────
-const MISSED_WINDOW_MS = 15 * 60 * 1000;
+const MISSED_WINDOW_MS = 5 * 60 * 1000;
 const dispensedAt: Partial<Record<Slot, number>> = {};
-const missedFired: Partial<Record<Slot, boolean>> = {};
+const lastReminderAt: Partial<Record<Slot, number>> = {};
 
 function checkMissedDoses() {
-  load();
   const now = Date.now();
   SLOTS.forEach((sl) => {
     const status = state.doses[sl.id];
-    if (status === "dispensed") {
-      if (!dispensedAt[sl.id]) dispensedAt[sl.id] = now;
-      if (!missedFired[sl.id] && dispensedAt[sl.id] && now - dispensedAt[sl.id]! > MISSED_WINDOW_MS) {
-        missedFired[sl.id] = true;
-        handleDeviceEvent({ kind: "dose", slot: sl.id, status: "not_removed" });
+    if (status === "dispensed" || status === "not_removed") {
+      if (!dispensedAt[sl.id]) {
+        dispensedAt[sl.id] = now;
+        lastReminderAt[sl.id] = now;
+      }
+      if (now - lastReminderAt[sl.id]! >= MISSED_WINDOW_MS) {
+        lastReminderAt[sl.id] = now;
+        if (status === "dispensed") {
+          handleDeviceEvent({ kind: "dose", slot: sl.id, status: "not_removed" });
+        }
+        pushAlert("missed", `Patient has not picked up their ${sl.label} dose!`, true);
       }
     } else {
       dispensedAt[sl.id] = undefined;
-      missedFired[sl.id] = undefined;
+      lastReminderAt[sl.id] = undefined;
     }
   });
 }
@@ -449,6 +454,8 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
+
 
 
 
