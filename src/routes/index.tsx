@@ -183,3 +183,4 @@ function Vital({ icon, label, value, unit }: { icon: React.ReactNode; label: str
   );
 }
 
+

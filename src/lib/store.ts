@@ -31,7 +31,7 @@ export type State = {
   mqtt: { broker: string; port: number | string; connected: boolean; user: string; pass: string };
   telegram: { botToken: string; chatId: string };
   checkup: { nextDate: string; doctor: string; notes: string };
-  box: { loadCellGrams: number; dfplaying: boolean; lastDispenseSlot: Slot | null };
+  box: { loadCellGrams: number; currentStatus: string; lastDispenseSlot: Slot | null };
   theme: "light" | "dark" | "system"; isConnecting?: boolean; firebaseError?: string; firebaseError?: string;
 };
 
@@ -53,7 +53,7 @@ const initial: State = {
   mqtt:      { broker: "", port: 8084, connected: false, user: "", pass: "" },
   telegram:  { botToken: "", chatId: "" },
   checkup:   { nextDate: "", doctor: "", notes: "" },
-  box:       { loadCellGrams: 0, dfplaying: false, lastDispenseSlot: null },
+  box:       { loadCellGrams: 0, currentStatus: "IDLE", lastDispenseSlot: null },
   theme:     "system",
 };
 
@@ -188,7 +188,7 @@ export type DeviceEvent =
   | { kind: "box"; online: boolean; tray?: string }
   | { kind: "band"; online: boolean }
   | { kind: "loadcell"; grams: number }
-  | { kind: "dfplayer"; playing: boolean };
+  ;
 
 export function handleDeviceEvent(e: DeviceEvent) {
   const now = Date.now();
@@ -229,9 +229,7 @@ export function handleDeviceEvent(e: DeviceEvent) {
     case "loadcell":
       setState((s) => ({ ...s, box: { ...s.box, loadCellGrams: e.grams } }));
       break;
-    case "dfplayer":
-      setState((s) => ({ ...s, box: { ...s.box, dfplaying: e.playing } }));
-      break;
+    
   }
 }
 
@@ -333,8 +331,8 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
           if (!isOnline) pushAlertThrottled("offline", "Dispenser box went offline");
         }
         const slot = state.box.lastDispenseSlot ?? "morning";
-        if (d.status === "DISPENSED") {  handleDeviceEvent({ kind: "dfplayer", playing: true }); }
-        else if (d.status === "TAKEN" || d.status === "REMOVED") { handleDeviceEvent({ kind: "dose", slot, status: "removed" }); handleDeviceEvent({ kind: "loadcell", grams: 0 }); handleDeviceEvent({ kind: "dfplayer", playing: false }); }
+        if (d.status === "DISPENSED") {   }
+        else if (d.status === "TAKEN" || d.status === "REMOVED") { handleDeviceEvent({ kind: "dose", slot, status: "removed" }); handleDeviceEvent({ kind: "loadcell", grams: 0 });  }
         else if (d.status === "NOT_TAKEN") { handleDeviceEvent({ kind: "dose", slot, status: "not_removed" }); }
         if (d.loadCell != null) handleDeviceEvent({ kind: "loadcell", grams: d.loadCell });
       }, (err) => {
@@ -390,7 +388,7 @@ export function manualDispense(slot: Slot) {
   setState((s) => ({ ...s, box: { ...s.box, lastDispenseSlot: slot } }));
   publishMqtt("smartmed/box/command", `DISPENSE_${slot.toUpperCase()}`);
   
-  handleDeviceEvent({ kind: "dfplayer", playing: true });
+  
 }
 
 function checkDispenseSchedule() {
@@ -418,7 +416,7 @@ function checkDispenseSchedule() {
     setState((s) => ({ ...s, box: { ...s.box, lastDispenseSlot: sl.id } }));
     publishMqtt("smartmed/box/command", `DISPENSE_${sl.id.toUpperCase()}`);
     
-    handleDeviceEvent({ kind: "dfplayer", playing: true });
+    
   });
 }
 
@@ -454,6 +452,7 @@ if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
 }
+
 
 
 
