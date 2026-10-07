@@ -67,54 +67,45 @@ function Dashboard() {
       {/* Box tray + DFPlayer status */}
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold">Tablet tray status</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">Updated live from the load cell inside the dispenser box.</p>
-            </div>
-            {s.box.dfplaying && (
-              <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary animate-pulse">
-                <Volume2 size={13} /> Reminder playing
-              </span>
-            )}
+          <div className="mb-4">
+            <h3 className="font-semibold">Tablet tray status</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">Updated live from the load cell inside the dispenser box.</p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            {SLOTS.map((sl) => {
-              const doseStatus = s.doses[sl.id];
-              const boxOnline = s.devices.box.online;
+          
+          {(() => {
+            const status = s.box.currentStatus || "IDLE";
+            const boxOnline = s.devices.box.online;
 
-              let icon = "💊";
-              let label = "Scheduled";
-              let sublabel = "Not yet dispensed";
-              let bg = "bg-muted/40";
-              let borderCls = "border-border";
-              let labelColor = "text-muted-foreground";
+            let icon = "??";
+            let label = "Empty / Scheduled";
+            let sublabel = "Tray is clear and waiting for schedule";
+            let bg = "bg-muted/40";
+            let borderCls = "border-border";
+            let labelColor = "text-muted-foreground";
 
-              if (!boxOnline) {
-                icon = "—"; label = "No signal"; sublabel = "Box offline";
-              } else if (doseStatus === "removed") {
-                icon = "✅"; label = "Taken"; sublabel = "Confirmed by tray sensor";
-                bg = "bg-success/10"; borderCls = "border-success/30"; labelColor = "text-success";
-              } else if (doseStatus === "dispensed") {
-                icon = "⏳"; label = "In tray"; sublabel = "Waiting to be picked up";
-                bg = "bg-primary/[0.07]"; borderCls = "border-primary/30"; labelColor = "text-primary";
-              } else if (doseStatus === "not_removed") {
-                icon = "⚠️"; label = "Not taken"; sublabel = "Alert sent to caregiver";
-                bg = "bg-destructive/[0.07]"; borderCls = "border-destructive/30"; labelColor = "text-destructive";
-              }
+            if (!boxOnline) {
+              icon = "??"; label = "Offline"; sublabel = "No signal from Box";
+            } else if (status === "DISPENSING") {
+              icon = "??"; label = "Dispensing..."; sublabel = "Medicine is dropping now";
+              bg = "bg-primary/20"; borderCls = "border-primary/50 animate-pulse"; labelColor = "text-primary";
+            } else if (status === "DISPENSED" || status === "NOT_REMOVED") {
+              icon = "??"; label = "Tablet Not Removed"; sublabel = "Waiting for patient to pick up (In Tray)";
+              bg = "bg-destructive/[0.15]"; borderCls = "border-destructive/50 animate-pulse"; labelColor = "text-destructive";
+            } else if (status === "TAKEN" || status === "REMOVED") {
+              icon = "?"; label = "Tablet Removed"; sublabel = "Medicine was picked up";
+              bg = "bg-success/10"; borderCls = "border-success/30"; labelColor = "text-success";
+            }
 
-              return (
-                <div key={sl.id} className={`flex flex-col items-center justify-center gap-2 rounded-xl border p-5 text-center transition-colors ${bg} ${borderCls}`}>
-                  <span className="text-3xl leading-none">{icon}</span>
-                  <div>
-                    <p className={`text-sm font-bold ${labelColor}`}>{label}</p>
-                    <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{sublabel}</p>
-                  </div>
-                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{sl.label}</p>
+            return (
+              <div className={"flex flex-col items-center justify-center gap-3 rounded-xl border p-8 text-center transition-colors " + bg + " " + borderCls}>
+                <span className="text-5xl leading-none">{icon}</span>
+                <div>
+                  <p className={"text-xl font-bold " + labelColor}>{label}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{sublabel}</p>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })()}
         </Card>
         {/* Doctor Check-up */}
         <Card>
