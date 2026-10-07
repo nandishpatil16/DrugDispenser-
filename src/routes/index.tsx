@@ -76,7 +76,7 @@ function Dashboard() {
             const status = s.box.currentStatus || "IDLE";
             const boxOnline = s.devices.box.online;
 
-            let icon = "??";
+            let icon = "?";
             let label = "Empty / Scheduled";
             let sublabel = "Tray is clear and waiting for schedule";
             let bg = "bg-muted/40";
@@ -84,9 +84,9 @@ function Dashboard() {
             let labelColor = "text-muted-foreground";
 
             if (!boxOnline) {
-              icon = "??"; label = "Offline"; sublabel = "No signal from Box";
+              icon = "?"; label = "Offline"; sublabel = "No signal from Box";
             } else if (status === "DISPENSING") {
-              icon = "??"; label = "Dispensing..."; sublabel = "Medicine is dropping now";
+              icon = "?"; label = "Dispensing..."; sublabel = "Medicine is dropping now";
               bg = "bg-primary/20"; borderCls = "border-primary/50 animate-pulse"; labelColor = "text-primary";
             } else if (status === "DISPENSED" || status === "NOT_REMOVED") {
               icon = "??"; label = "Tablet Not Removed"; sublabel = "Waiting for patient to pick up (In Tray)";
