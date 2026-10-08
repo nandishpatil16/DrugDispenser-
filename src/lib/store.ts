@@ -220,11 +220,11 @@ export function handleDeviceEvent(e: DeviceEvent) {
       break;
     case "box":
       setState((s) => ({ ...s, devices: { ...s.devices, box: { online: e.online, tray: e.tray, lastSync: now } } }));
-      if (!e.online) /* offline alert disabled to prevent spam */
+      /* offline alert disabled to prevent spam */
       break;
     case "band":
       setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: e.online } } }));
-      if (!e.online) /* offline alert disabled to prevent spam */
+      /* offline alert disabled to prevent spam */
       break;
     case "loadcell":
       setState((s) => ({ ...s, box: { ...s.box, loadCellGrams: e.grams } }));
@@ -310,7 +310,7 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
         const isOnline = d.online !== false;
         if (state.devices.band.online !== isOnline) {
           setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: isOnline, lastSync: Date.now() } } }));
-          if (!isOnline) /* offline alert disabled to prevent spam */
+          /* offline alert disabled to prevent spam */
         }
           if (d.sos && Date.now() - (window as any)._lastSos > 15000) { (window as any)._lastSos = Date.now(); handleDeviceEvent({ kind: "sos" }); }
         const hr = Number(d.heartRate);
@@ -328,7 +328,7 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
         const isOnline = d.online !== false;
         if (state.devices.box.online !== isOnline) {
           setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: isOnline, lastSync: Date.now() } } }));
-          if (!isOnline) /* offline alert disabled to prevent spam */
+          /* offline alert disabled to prevent spam */
         }
         const slot = state.box.lastDispenseSlot ?? "morning";
           
