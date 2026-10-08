@@ -385,8 +385,12 @@ export function manualDispense(slot: Slot) {
   if (!state.mqtt.connected) return;
   const todayKey = new Date().toISOString().slice(0, 10);
   
-  setState((s) => ({ ...s, box: { ...s.box, lastDispenseSlot: slot } }));
-  publishMqtt("smartmed/box/command", `DISPENSE_${slot.toUpperCase()}`);
+  setState((s) => ({ 
+      ...s, 
+      box: { ...s.box, lastDispenseSlot: slot, currentStatus: "DISPENSING" },
+      doses: { ...s.doses, [slot]: "scheduled" } 
+    }));
+    publishMqtt("smartmed/box/command", `DISPENSE_${slot.toUpperCase()}`);
   
   
 }
