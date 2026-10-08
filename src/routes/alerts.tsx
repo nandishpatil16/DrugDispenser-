@@ -29,21 +29,21 @@ const META: Record<AlertType, { label: string; icon: React.ReactNode; tone: "dan
 
 function Alerts() {
   const alerts = useStore((s) => s.alerts);
-  const ackAll = () => setState((s) => ({ ...s, alerts: s.alerts.map((a) => ({ ...a, ack: true })) }));
+  const clearAll = () => setState((s) => ({ ...s, alerts: [] }));
   return (
     <>
-      <PageHeader title="Alerts" sub="Emergency notifications from the band and dispenser." action={alerts.some((a) => !a.ack) && <Button variant="outline" onClick={ackAll}><Check size={16} /> Acknowledge all</Button>} />
+      <PageHeader title="Alerts" sub="Emergency notifications from the band and dispenser." action={alerts.length > 0 && <Button variant="outline" onClick={clearAll}><Check size={16} /> Clear all</Button>} />
       <Card>
         {alerts.length === 0 ? <Empty icon={<Bell />} title="No alerts" text="SOS presses, falls, abnormal vitals and missed doses will appear here instantly." /> : (
           <div className="divide-y">
             {alerts.map((a) => {
               const m = META[a.type];
               return (
-                <div key={a.id} className={`flex items-center gap-4 py-3 ${a.ack ? "opacity-60" : ""}`}>
+                <div key={a.id} className="flex items-center gap-4 py-3">
                   <div className={`grid h-10 w-10 place-items-center rounded-lg ${m.tone === "danger" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"}`}>{m.icon}</div>
                   <div className="flex-1"><p className="font-medium">{a.message}</p><p className="text-xs text-muted-foreground">{fmtTime(a.at)}</p></div>
                   <Badge tone={m.tone}>{m.label}</Badge>
-                  {!a.ack && <Button variant="ghost" onClick={() => setState((s) => ({ ...s, alerts: s.alerts.map((x) => (x.id === a.id ? { ...x, ack: true } : x)) }))}>Acknowledge</Button>}
+                  <Button variant="ghost" onClick={() => setState((s) => ({ ...s, alerts: s.alerts.filter((x) => x.id !== a.id) }))}>Clear</Button>
                 </div>
               );
             })}
