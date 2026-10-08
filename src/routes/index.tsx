@@ -52,18 +52,6 @@ function Dashboard() {
         </Badge>
       </Card>
 
-      {/* Vitals row */}
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Vital icon={<Heart size={18} />} label="Heart rate" value={last?.hr} unit="bpm" />
-        <Vital icon={<Droplets size={18} />} label="SpO₂" value={last?.spo2} unit="%" />
-        
-        <Card>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><RefreshCw size={18} /> Last sync</div>
-          <p className="mt-3 text-lg font-semibold">{fmtTime(last?.at)}</p>
-          <p className="text-xs text-muted-foreground">{last ? "From band" : "Waiting for band connection"}</p>
-        </Card>
-      </div>
-
       {/* Box tray + DFPlayer status */}
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
