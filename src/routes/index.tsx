@@ -134,16 +134,12 @@ function Dashboard() {
             </div>
             <Link to="/schedule" className="inline-flex items-center gap-1 text-sm font-semibold text-primary">Manage <ArrowRight size={15} /></Link>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="divide-y">
             {SLOTS.map((sl) => {
               const p = s.schedule[sl.id];
               const st = DOSE[s.doses[sl.id] ?? "scheduled"];
               return (
-                const rowCls = st.tone === "ok" ? "bg-success/10 border border-success/30 shadow-sm shadow-success/10 rounded-xl px-4" : 
-                                   st.tone === "danger" ? "bg-destructive/10 border border-destructive/30 shadow-sm shadow-destructive/10 rounded-xl px-4" : 
-                                   st.tone === "primary" ? "bg-primary/10 border border-primary/30 shadow-sm shadow-primary/10 rounded-xl px-4" : "border border-transparent hover:bg-muted/30 rounded-xl px-4";
-                return (
-                  <div key={sl.id} className={`flex items-center gap-4 py-3 transition-all ${rowCls}`}>
+                <div key={sl.id} className="flex items-center gap-4 py-3">
                   <span className="w-16 font-mono text-sm">{p.time}</span>
                   <div className="flex-1">
                     <p className="font-medium">{sl.label}</p>
