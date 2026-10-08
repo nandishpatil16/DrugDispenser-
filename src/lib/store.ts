@@ -220,11 +220,11 @@ export function handleDeviceEvent(e: DeviceEvent) {
       break;
     case "box":
       setState((s) => ({ ...s, devices: { ...s.devices, box: { online: e.online, tray: e.tray, lastSync: now } } }));
-      if (!e.online) pushAlertThrottled("offline", "Dispenser box went offline");
+      if (!e.online) /* offline alert disabled to prevent spam */
       break;
     case "band":
       setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: e.online } } }));
-      if (!e.online) pushAlertThrottled("offline", "Monitoring band went offline");
+      if (!e.online) /* offline alert disabled to prevent spam */
       break;
     case "loadcell":
       setState((s) => ({ ...s, box: { ...s.box, loadCellGrams: e.grams } }));
@@ -269,13 +269,13 @@ function startWatchdogs() {
   boxWatchdog = setInterval(() => {
     if (lastBoxMsg > 0 && Date.now() - lastBoxMsg > DEVICE_TIMEOUT_MS && state.devices.box.online) {
       setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: false } } }));
-      pushAlertThrottled("offline", "Dispenser box went offline");
+      /* offline alert disabled to prevent spam */
     }
   }, 5000);
   bandWatchdog = setInterval(() => {
     if (lastBandMsg > 0 && Date.now() - lastBandMsg > DEVICE_TIMEOUT_MS && state.devices.band.online) {
       setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: false } } }));
-      pushAlertThrottled("offline", "Monitoring band went offline");
+      /* offline alert disabled to prevent spam */
     }
   }, 5000);
 }
@@ -310,7 +310,7 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
         const isOnline = d.online !== false;
         if (state.devices.band.online !== isOnline) {
           setState((s) => ({ ...s, devices: { ...s.devices, band: { ...s.devices.band, online: isOnline, lastSync: Date.now() } } }));
-          if (!isOnline) pushAlertThrottled("offline", "Monitoring band went offline");
+          if (!isOnline) /* offline alert disabled to prevent spam */
         }
           if (d.sos && Date.now() - (window as any)._lastSos > 15000) { (window as any)._lastSos = Date.now(); handleDeviceEvent({ kind: "sos" }); }
         const hr = Number(d.heartRate);
@@ -328,7 +328,7 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
         const isOnline = d.online !== false;
         if (state.devices.box.online !== isOnline) {
           setState((s) => ({ ...s, devices: { ...s.devices, box: { ...s.devices.box, online: isOnline, lastSync: Date.now() } } }));
-          if (!isOnline) pushAlertThrottled("offline", "Dispenser box went offline");
+          if (!isOnline) /* offline alert disabled to prevent spam */
         }
         const slot = state.box.lastDispenseSlot ?? "morning";
           

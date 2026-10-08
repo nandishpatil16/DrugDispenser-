@@ -23,6 +23,7 @@ const META: Record<AlertType, { label: string; icon: React.ReactNode; tone: "dan
   heart: { label: "Heart rate", icon: <HeartPulse size={18} />, tone: "danger" },
   spo2: { label: "SpO₂", icon: <Droplets size={18} />, tone: "danger" },
   dose: { label: "Dose", icon: <Pill size={18} />, tone: "warn" },
+  missed: { label: "Missed", icon: <Pill size={18} />, tone: "warn" },
   offline: { label: "Device", icon: <WifiOff size={18} />, tone: "muted" },
 };
 
