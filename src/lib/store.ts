@@ -463,9 +463,36 @@ function checkMissedDoses() {
   });
 }
 
+
+let lastCheckupAlert = 0;
+function checkCheckup() {
+  const { nextDate, doctor } = state.checkup;
+  if (!nextDate) return;
+  
+  const aptTime = new Date(nextDate).getTime();
+  const now = Date.now();
+  
+  // Alert if appointment is in the next 24 hours
+  // To avoid spamming, only alert once a day max
+  if (aptTime - now > 0 && aptTime - now <= 24 * 60 * 60 * 1000) {
+    if (now - lastCheckupAlert > 24 * 60 * 60 * 1000) {
+      lastCheckupAlert = now;
+      pushAlert("dose", `Reminder: Checkup scheduled with ${doctor || "doctor"} tomorrow!`);
+    }
+  } 
+  // Alert if appointment is exactly today/now (within 1 hour)
+  else if (now - aptTime >= 0 && now - aptTime <= 60 * 60 * 1000) {
+     if (now - lastCheckupAlert > 6 * 60 * 60 * 1000) { // re-alert if we havent alerted in 6 hrs
+       lastCheckupAlert = now;
+       pushAlert("dose", `Reminder: Checkup scheduled with ${doctor || "doctor"} is happening now!`);
+     }
+  }
+}
+
 if (typeof window !== "undefined") {
   setInterval(checkDispenseSchedule, 30_000);
   setInterval(checkMissedDoses, 60_000);
+    setInterval(checkCheckup, 60_000);
 }
 
 
