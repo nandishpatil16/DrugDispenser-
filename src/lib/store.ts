@@ -450,11 +450,11 @@ function checkMissedDoses() {
         lastReminderAt[sl.id] = now;
       }
       if (now - lastReminderAt[sl.id]! >= MISSED_WINDOW_MS) {
-        lastReminderAt[sl.id] = now;
-        if (status === "dispensed") {
+        lastReminderAt[sl.id] = 9999999999999;
+          if (status === "dispensed") {
           handleDeviceEvent({ kind: "dose", slot: sl.id, status: "not_removed" });
         }
-        pushAlert("missed", `Patient has not picked up their ${sl.label} dose!`, true);
+        pushAlert("dose", `Patient has not picked up their ${sl.label} dose!`, true);
       }
     } else {
       dispensedAt[sl.id] = undefined;
