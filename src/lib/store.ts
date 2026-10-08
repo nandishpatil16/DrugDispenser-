@@ -331,10 +331,21 @@ function firebaseConnect(apiKey: string, dbUrl: string, user: string, pass: stri
           if (!isOnline) pushAlertThrottled("offline", "Dispenser box went offline");
         }
         const slot = state.box.lastDispenseSlot ?? "morning";
-        if (d.status === "DISPENSED") {   }
-        else if (d.status === "TAKEN" || d.status === "REMOVED") { handleDeviceEvent({ kind: "dose", slot, status: "removed" }); handleDeviceEvent({ kind: "loadcell", grams: 0 });  }
-        else if (d.status === "NOT_TAKEN") { handleDeviceEvent({ kind: "dose", slot, status: "not_removed" }); }
-        if (d.loadCell != null) handleDeviceEvent({ kind: "loadcell", grams: d.loadCell });
+          
+          setState((s) => ({ ...s, box: { ...s.box, currentStatus: d.status || "IDLE" } }));
+          
+          if (d.status === "DISPENSED") { 
+            handleDeviceEvent({ kind: "dose", slot, status: "dispensed" }); 
+          }
+          else if (d.status === "TAKEN" || d.status === "REMOVED") { 
+            handleDeviceEvent({ kind: "dose", slot, status: "removed" }); 
+            handleDeviceEvent({ kind: "loadcell", grams: 0 });  
+          }
+          else if (d.status === "NOT_TAKEN" || d.status === "ERROR_EMPTY") { 
+            handleDeviceEvent({ kind: "dose", slot, status: "not_removed" }); 
+          }
+          
+          if (d.loadCell != null) handleDeviceEvent({ kind: "loadcell", grams: d.loadCell });
       }, (err) => {
         setState(s => ({ ...s, firebaseError: `Firebase cannot read devices/box: ${err.message}`, isConnecting: false, mqtt: { ...s.mqtt, connected: false } }));
       });
