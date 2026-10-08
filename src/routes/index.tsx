@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Heart, Droplets, PersonStanding, RefreshCw, Cpu, AlertTriangle, ArrowRight, CalendarClock, Volume2, Stethoscope } from "lucide-react";
+import { Heart, Droplets, PersonStanding, RefreshCw, Cpu, AlertTriangle, ArrowRight, CalendarClock, Volume2, Stethoscope, Inbox, WifiOff, Loader2, Pill, CheckCircle } from "lucide-react";
 import { useStore, SLOTS, slotTotalMg, fmtTime, type DoseStatus } from "@/lib/store";
 import { Card, PageHeader, Badge } from "@/components/ui-kit";
 import { AdviceCard } from "@/components/AdviceCard";
@@ -52,7 +52,7 @@ function Dashboard() {
         </Badge>
       </Card>
 
-      {/* Box tray + DFPlayer status */}
+      {/* Box tray status */}
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <div className="mb-4">
@@ -64,32 +64,46 @@ function Dashboard() {
             const status = s.box.currentStatus || "IDLE";
             const boxOnline = s.devices.box.online;
 
-            let icon = "?";
-            let label = "Empty / Scheduled";
-            let sublabel = "Tray is clear and waiting for schedule";
+            let icon = <Inbox size={56} className="text-muted-foreground opacity-50" />;
+            let label = "Tray is Empty";
+            let sublabel = "Waiting for the next scheduled dose";
             let bg = "bg-muted/40";
             let borderCls = "border-border";
             let labelColor = "text-muted-foreground";
 
             if (!boxOnline) {
-              icon = "?"; label = "Offline"; sublabel = "No signal from Box";
+              icon = <WifiOff size={56} className="text-muted-foreground opacity-50" />;
+              label = "Box Offline";
+              sublabel = "No signal from Dispenser Box";
             } else if (status === "DISPENSING") {
-              icon = "?"; label = "Dispensing..."; sublabel = "Medicine is dropping now";
-              bg = "bg-primary/20"; borderCls = "border-primary/50 animate-pulse"; labelColor = "text-primary";
+              icon = <Loader2 size={56} className="text-primary animate-spin" />;
+              label = "Dispensing...";
+              sublabel = "Medicine is dropping into the tray";
+              bg = "bg-primary/10";
+              borderCls = "border-primary/30";
+              labelColor = "text-primary";
             } else if (status === "DISPENSED" || status === "NOT_REMOVED") {
-              icon = "??"; label = "Tablet Not Removed"; sublabel = "Waiting for patient to pick up (In Tray)";
-              bg = "bg-destructive/[0.15]"; borderCls = "border-destructive/50 animate-pulse"; labelColor = "text-destructive";
+              icon = <Pill size={56} className="text-destructive animate-pulse drop-shadow-md" />;
+              label = "Tablet in Tray (Not Picked)";
+              sublabel = "Patient has not taken their medicine yet!";
+              bg = "bg-destructive/10";
+              borderCls = "border-destructive/40 shadow-sm shadow-destructive/20";
+              labelColor = "text-destructive";
             } else if (status === "TAKEN" || status === "REMOVED") {
-              icon = "?"; label = "Tablet Removed"; sublabel = "Medicine was picked up";
-              bg = "bg-success/10"; borderCls = "border-success/30"; labelColor = "text-success";
+              icon = <CheckCircle size={56} className="text-success drop-shadow-sm" />;
+              label = "Tablet Taken";
+              sublabel = "Patient successfully picked up their medicine!";
+              bg = "bg-success/15";
+              borderCls = "border-success/40 shadow-sm shadow-success/20";
+              labelColor = "text-success";
             }
 
             return (
-              <div className={"flex flex-col items-center justify-center gap-3 rounded-xl border p-8 text-center transition-colors " + bg + " " + borderCls}>
-                <span className="text-5xl leading-none">{icon}</span>
+              <div className={"flex flex-col items-center justify-center gap-4 rounded-xl border py-10 px-6 text-center transition-all duration-500 " + bg + " " + borderCls}>
+                {icon}
                 <div>
-                  <p className={"text-xl font-bold " + labelColor}>{label}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{sublabel}</p>
+                  <p className={"text-2xl font-bold tracking-tight " + labelColor}>{label}</p>
+                  <p className="mt-1.5 text-sm font-medium text-muted-foreground">{sublabel}</p>
                 </div>
               </div>
             );
